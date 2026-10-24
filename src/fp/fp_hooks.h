@@ -13,6 +13,8 @@
 #include "../tile_type.h"
 #include "../vehicle_type.h"
 
+struct DrawPixelInfo;
+
 /**
  * The first-person mode (OTTD-FP), see docs/fp/architecture.md.
  *
@@ -39,6 +41,20 @@ inline void OnTickEnd() {}
 inline void OnVehicleDestroyed(VehicleID) {}
 inline void RegisterConsoleCommands() {}
 inline bool CapturesDirectionKeys() { return false; }
+#endif /* WITH_FP */
+
+#ifdef WITH_FP
+/*
+ * Implemented by the core for the first-person mode, in the files whose
+ * static state they need; see docs/fp/README.md. Called with the game state
+ * lock held.
+ */
+struct TileSpriteCapture;
+
+/* viewport.cpp */
+void CaptureTileSprites(TileIndex tile, TileSpriteCapture &out);
+void DrawCapturedTileSprites(const TileSpriteCapture &capture, const DrawPixelInfo &area);
+void DrawLandscapeLikeViewport(const DrawPixelInfo &area);
 #endif /* WITH_FP */
 
 #if defined(WITH_FP) && defined(WITH_OPENGL) && !defined(DEDICATED)
