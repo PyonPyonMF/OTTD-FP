@@ -12,6 +12,7 @@
 
 #include "../../tile_type.h"
 #include "../core/fp_chunk.h"
+#include "fp_tile_sprites.h"
 
 namespace fp {
 
@@ -70,6 +71,7 @@ struct TerrainChunkData {
 TerrainClass ClassifyTile(TileIndex tile);
 void CaptureTerrainChunk(uint chunk_x, uint chunk_y, TerrainChunkData &out);
 uint64_t HashTerrainChunk(const TerrainChunkData &data);
+void CaptureChunkSprites(uint chunk_x, uint chunk_y, TileSpriteCapture &out);
 
 } // namespace fp
 

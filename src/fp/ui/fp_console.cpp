@@ -41,8 +41,13 @@ static void PrintStatus()
 				spectator.GetName(), camera.position.x, camera.position.y, camera.position.z, spectator.GetHeightAboveGround());
 
 		const WorldMirror::Statistics &mirror = runtime.GetWorldMirror().GetStatistics();
-		IConsolePrint(CC_DEFAULT, "  world mirror: {} chunks built, {} pending, {} meshed, {} changes without effect on the terrain",
-				mirror.built_chunks, mirror.pending_chunks, mirror.meshed_chunks, mirror.unchanged_chunks);
+		IConsolePrint(CC_DEFAULT, "  world mirror: {} chunks built, {} pending, {} meshed, {} with new sprites, {} changes without effect",
+				mirror.built_chunks, mirror.pending_chunks, mirror.meshed_chunks, mirror.sprite_changes, mirror.unchanged_chunks);
+		if (mirror.captured_chunks > 0) {
+			auto per_chunk = [&mirror](std::chrono::nanoseconds time) { return std::chrono::duration<double, std::micro>(time).count() / mirror.captured_chunks; };
+			IConsolePrint(CC_DEFAULT, "  per chunk: terrain {:.0f} us, sprites {:.0f} us ({:.0f} sprites)",
+					per_chunk(mirror.terrain_time), per_chunk(mirror.sprite_time), static_cast<double>(mirror.captured_sprites) / mirror.captured_chunks);
+		}
 	}
 
 	RendererStatus status = runtime.GetHandoff().GetRendererStatus();

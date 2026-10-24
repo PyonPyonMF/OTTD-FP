@@ -9,6 +9,7 @@
 
 #include "../../stdafx.h"
 #include "fp_tile_capture.h"
+#include "../fp_hooks.h"
 #include "../../clear_map.h"
 #include "../../core/enum_type.hpp"
 #include "../../map_func.h"
@@ -113,6 +114,27 @@ uint64_t HashTerrainChunk(const TerrainChunkData &data)
 	for (uint8_t height : data.heights) mix(height);
 	for (TerrainClass terrain_class : data.classes) mix(to_underlying(terrain_class));
 	return hash;
+}
+
+/**
+ * Record the sprites the 2D view draws for the tiles of one chunk, see CaptureTileSprites().
+ * Tiles are captured row by row, i.e. tile (x, y) of the chunk is tile y * width + x of the capture.
+ * @param chunk_x X coordinate of the chunk.
+ * @param chunk_y Y coordinate of the chunk.
+ * @param[out] out Receives the sprites; what it held before is dropped.
+ * @pre The game state lock is held.
+ */
+void CaptureChunkSprites(uint chunk_x, uint chunk_y, TileSpriteCapture &out)
+{
+	uint x0 = chunk_x * CHUNK_SIZE;
+	uint y0 = chunk_y * CHUNK_SIZE;
+	uint x1 = std::min(x0 + CHUNK_SIZE, Map::SizeX());
+	uint y1 = std::min(y0 + CHUNK_SIZE, Map::SizeY());
+
+	out.Clear();
+	for (uint y = y0; y < y1; y++) {
+		for (uint x = x0; x < x1; x++) CaptureTileSprites(TileXY(x, y), out);
+	}
 }
 
 } // namespace fp
