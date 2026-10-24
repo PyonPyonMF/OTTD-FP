@@ -356,6 +356,12 @@ enum class WindowClass : uint16_t {
 	VehicleView,
 
 	/**
+	 * Vehicle cab view; %Window numbers:
+	 *   - #VehicleID = #CabViewWidgets
+	 */
+	VehicleCabView,
+
+	/**
 	 * Station view; %Window numbers:
 	 *   - #StationID = #StationViewWidgets
 	 */

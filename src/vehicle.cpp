@@ -876,6 +876,7 @@ void Vehicle::PreDestructor()
 
 	if (this->IsPrimaryVehicle()) {
 		CloseWindowById(WindowClass::VehicleView, this->index);
+		CloseWindowById(WindowClass::VehicleCabView, this->index);
 		CloseWindowById(WindowClass::VehicleOrders, this->index);
 		CloseWindowById(WindowClass::VehicleRefit, this->index);
 		CloseWindowById(WindowClass::VehicleDetails, this->index);
