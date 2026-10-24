@@ -40,8 +40,9 @@ static void PngWarning(png_structp, png_const_charp)
 }
 
 /**
- * Write an image to a PNG file with alpha channel. The sprite offsets are
- * stored as "oFFs" chunk, so tools can align images as the game does.
+ * Write an image to a PNG file with alpha channel. The sprite offsets and
+ * the zoom level go into a comment; an "oFFs" chunk would make some tools
+ * shift the image.
  * @param image The image.
  * @param filename Name of the file.
  * @return Why writing failed, or std::nullopt on success.
@@ -68,6 +69,9 @@ std::optional<std::string> WriteSpritePng(const SpriteImage &image, const std::s
 		rows[y] = const_cast<png_bytep>(reinterpret_cast<const uint8_t *>(&image.pixels[static_cast<size_t>(y) * image.width]));
 	}
 
+	/* Everything with a destructor must exist before setjmp(): libpng leaves through longjmp() on errors. */
+	std::string comment = fmt::format("OpenTTD sprite: x_offs {}, y_offs {}, {} ZoomLevel::Min pixels per pixel", image.x_offs, image.y_offs, image.Scale());
+
 	if (setjmp(png_jmpbuf(png_ptr))) {
 		png_destroy_write_struct(&png_ptr, &info_ptr);
 		return fmt::format("libpng: {}", error);
@@ -75,7 +79,12 @@ std::optional<std::string> WriteSpritePng(const SpriteImage &image, const std::s
 
 	png_init_io(png_ptr, *file);
 	png_set_IHDR(png_ptr, info_ptr, image.width, image.height, 8, PNG_COLOR_TYPE_RGBA, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
-	png_set_oFFs(png_ptr, info_ptr, image.x_offs, image.y_offs, PNG_OFFSET_PIXEL);
+	png_text text{};
+	text.compression = PNG_TEXT_COMPRESSION_NONE;
+	text.key = const_cast<char *>("Comment");
+	text.text = comment.data();
+	text.text_length = comment.size();
+	png_set_text(png_ptr, info_ptr, &text, 1);
 	png_write_info(png_ptr, info_ptr);
 	png_write_image(png_ptr, rows.data());
 	png_write_end(png_ptr, info_ptr);
