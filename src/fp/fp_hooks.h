@@ -30,6 +30,7 @@ void OnMapAllocated();
 void OnTileDirty(TileIndex tile);
 void OnTickEnd();
 void OnVehicleDestroyed(VehicleID index);
+void OnSpritesInvalidated();
 void RegisterConsoleCommands();
 bool CapturesDirectionKeys();
 #else
@@ -37,6 +38,7 @@ inline void OnMapAllocated() {}
 inline void OnTileDirty(TileIndex) {}
 inline void OnTickEnd() {}
 inline void OnVehicleDestroyed(VehicleID) {}
+inline void OnSpritesInvalidated() {}
 inline void RegisterConsoleCommands() {}
 inline bool CapturesDirectionKeys() { return false; }
 #endif /* WITH_FP */
