@@ -118,7 +118,7 @@ static std::optional<std::string> GetVehicleLayers(std::string_view id, std::vec
 	VehicleSpriteSeq seq = v->sprite_cache.sprite_seq;
 	/* The 2D view refreshes the sprite of a vehicle only when it comes into view. */
 	if (v->sprite_cache.revalidate_before_draw) {
-		VehicleSpriteSeq fresh;
+		VehicleSpriteSeq fresh{};
 		v->GetImage(v->direction, EngineImageType::OnMap, &fresh);
 		if (fresh.IsValid()) seq = fresh;
 	}
