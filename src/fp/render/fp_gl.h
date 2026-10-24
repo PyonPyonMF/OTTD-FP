@@ -32,6 +32,7 @@ namespace fp {
 	X(glBindBuffer) \
 	X(glBindFramebuffer) \
 	X(glBindRenderbuffer) \
+	X(glBindTexture) \
 	X(glBindVertexArray) \
 	X(glBlitFramebuffer) \
 	X(glBufferData) \
@@ -48,11 +49,13 @@ namespace fp {
 	X(glDeleteProgram) \
 	X(glDeleteRenderbuffers) \
 	X(glDeleteShader) \
+	X(glDeleteTextures) \
 	X(glDeleteVertexArrays) \
 	X(glDepthFunc) \
 	X(glDepthMask) \
 	X(glDisable) \
 	X(glDrawArrays) \
+	X(glDrawArraysInstanced) \
 	X(glDrawElements) \
 	X(glDrawElementsInstanced) \
 	X(glEnable) \
@@ -62,6 +65,7 @@ namespace fp {
 	X(glGenBuffers) \
 	X(glGenFramebuffers) \
 	X(glGenRenderbuffers) \
+	X(glGenTextures) \
 	X(glGenVertexArrays) \
 	X(glGetBooleanv) \
 	X(glGetDoublev) \
@@ -77,9 +81,15 @@ namespace fp {
 	X(glGetUniformLocation) \
 	X(glIsEnabled) \
 	X(glLinkProgram) \
+	X(glPixelStorei) \
 	X(glRenderbufferStorage) \
 	X(glScissor) \
 	X(glShaderSource) \
+	X(glTexImage2D) \
+	X(glTexParameterf) \
+	X(glTexParameteri) \
+	X(glTexSubImage2D) \
+	X(glUniform1i) \
 	X(glUniform1f) \
 	X(glUniform2f) \
 	X(glUniform3f) \

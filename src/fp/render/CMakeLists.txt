@@ -1,4 +1,6 @@
 add_files(
+    fp_atlas_texture.cpp
+    fp_atlas_texture.h
     fp_gl.cpp
     fp_gl.h
     fp_gl_state.h

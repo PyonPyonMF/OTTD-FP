@@ -92,6 +92,62 @@ void main()
 )glsl";
 
 /**
+ * Sprites as billboards: upright quads that turn about the vertical axis to
+ * face the camera. The quad spans the image in metres around its anchor.
+ */
+static constexpr std::string_view BILLBOARD_VERTEX_SHADER = R"glsl(#version 330 core
+layout(location = 0) in vec3 a_anchor;
+layout(location = 1) in vec4 a_rect;
+layout(location = 2) in vec4 a_uv;
+uniform mat4 u_view_proj;
+out vec3 v_rel;
+out vec2 v_uv;
+void main()
+{
+	vec2 corner = vec2(float(gl_VertexID & 1), float(gl_VertexID >> 1));
+	float distance = length(a_anchor.xy);
+	vec2 right = distance > 1e-3 ? vec2(a_anchor.y, -a_anchor.x) / distance : vec2(1.0, 0.0);
+	float across = mix(a_rect.x, a_rect.y, corner.x);
+	float up = mix(a_rect.z, a_rect.w, corner.y);
+	v_rel = a_anchor + vec3(right * across, up);
+	v_uv = vec2(mix(a_uv.x, a_uv.z, corner.x), mix(a_uv.w, a_uv.y, corner.y));
+	gl_Position = u_view_proj * vec4(v_rel, 1.0);
+}
+)glsl";
+
+/**
+ * Sprites as billboards. The atlas is sRGB, so the texture already gives
+ * linear colours. Sprites carry their own light, so they are not lit again;
+ * pixels less than half covered are dropped.
+ *
+ * Seen from close by, a sprite pixel covers many screen pixels. Plain
+ * bilinear filtering would blur the pixel art, nearest filtering would make
+ * its edges crawl; so the coordinates snap to the texel centre and blend
+ * only across the last screen pixel before the next texel. From afar the
+ * mipmaps take over as usual.
+ */
+static constexpr std::string_view BILLBOARD_FRAGMENT_SHADER = R"glsl(#version 330 core
+in vec3 v_rel;
+in vec2 v_uv;
+uniform sampler2D u_atlas;
+uniform vec3 u_fog_colour;
+uniform float u_fog_density;
+out vec4 o_colour;
+void main()
+{
+	vec2 size = vec2(textureSize(u_atlas, 0));
+	vec2 position = v_uv * size;
+	vec2 seam = floor(position + 0.5);
+	position = seam + clamp((position - seam) / max(fwidth(position), vec2(1e-5)), -0.5, 0.5);
+	vec4 texel = textureGrad(u_atlas, position / size, dFdx(v_uv), dFdy(v_uv));
+	if (texel.a < 0.5) discard;
+	float fog = 1.0 - exp(-pow(length(v_rel) * u_fog_density, 2.0));
+	vec3 colour = mix(texel.rgb, pow(u_fog_colour, vec3(2.2)), fog);
+	o_colour = vec4(pow(colour, vec3(1.0 / 2.2)), 1.0);
+}
+)glsl";
+
+/**
  * Shared lighting of terrain and boxes. The normal comes from the screen-space
  * derivatives of the position, which gives flat shading without normals in
  * the vertex data; it always faces the viewer. On terrain, u_grid_strength

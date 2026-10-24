@@ -34,6 +34,16 @@ void ViewHandoff::Publish(const ViewFrame &frame, std::vector<ChunkOp> &&ops, bo
 	this->fresh = true;
 }
 
+/**
+ * Publish changes of the sprite atlas; they are taken together with the next frame.
+ * @param changes The changes; appended to those not yet taken.
+ */
+void ViewHandoff::PublishAtlas(AtlasChanges &&changes)
+{
+	std::lock_guard<std::mutex> guard(this->lock);
+	this->atlas.Merge(std::move(changes));
+}
+
 /** There is no view anymore; the renderer should release its resources. */
 void ViewHandoff::Deactivate()
 {
@@ -42,6 +52,8 @@ void ViewHandoff::Deactivate()
 	this->frame = {};
 	this->ops.clear();
 	this->reset_chunks = true;
+	this->atlas = {};
+	this->atlas.reset = true;
 	this->fresh = true;
 }
 
@@ -60,6 +72,9 @@ bool ViewHandoff::Take(ViewUpdate &update)
 	update.reset_chunks = std::exchange(this->reset_chunks, false);
 	update.ops.clear();
 	update.ops.swap(this->ops);
+	update.atlas = std::move(this->atlas);
+	this->atlas = {};
+	this->atlas.pages = update.atlas.pages;
 	this->fresh = false;
 	return true;
 }

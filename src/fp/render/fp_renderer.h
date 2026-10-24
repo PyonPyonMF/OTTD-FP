@@ -12,6 +12,7 @@
 
 #include "../runtime/fp_view_handoff.h"
 #include "../sim/fp_snapshot.h"
+#include "fp_atlas_texture.h"
 #include "fp_gl.h"
 
 namespace fp {
@@ -61,6 +62,21 @@ private:
 	};
 	static_assert(sizeof(BoxInstance) == 32);
 
+	/** Per-instance data of a billboard; must match the attributes of BILLBOARD_VERTEX_SHADER. */
+	struct BillboardInstance {
+		std::array<float, 3> anchor; ///< Anchor, relative to the camera.
+		std::array<float, 4> rect; ///< Left, right, bottom and top edge around the anchor, in metres.
+		std::array<float, 4> uv; ///< Texture coordinates: left, top, right and bottom.
+	};
+
+	/** Uniform locations of the billboard program. */
+	struct BillboardUniforms {
+		GLint view_proj = -1; ///< u_view_proj
+		GLint atlas = -1; ///< u_atlas
+		GLint fog_colour = -1; ///< u_fog_colour
+		GLint fog_density = -1; ///< u_fog_density
+	};
+
 	/** Uniform locations of the lit programs. */
 	struct LitUniforms {
 		GLint view_proj = -1; ///< u_view_proj
@@ -95,15 +111,19 @@ private:
 	GLuint sky_program = 0; ///< Program of the sky.
 	GLuint terrain_program = 0; ///< Program of the terrain.
 	GLuint box_program = 0; ///< Program of the vehicle boxes.
+	GLuint billboard_program = 0; ///< Program of the billboards.
 	SkyUniforms sky_uniforms{}; ///< Uniforms of #sky_program.
 	LitUniforms terrain_uniforms{}; ///< Uniforms of #terrain_program.
 	LitUniforms box_uniforms{}; ///< Uniforms of #box_program.
+	BillboardUniforms billboard_uniforms{}; ///< Uniforms of #billboard_program.
 
 	GLuint empty_vertex_array = 0; ///< Vertex array without attributes, for the sky.
 	GLuint box_vertex_array = 0; ///< Vertex array of the boxes.
 	GLuint box_vertex_buffer = 0; ///< Corners of the unit box.
 	GLuint box_index_buffer = 0; ///< Triangles of the unit box.
 	GLuint box_instance_buffer = 0; ///< Per-instance data of the boxes.
+	GLuint billboard_vertex_array = 0; ///< Vertex array of the billboards.
+	GLuint billboard_instance_buffer = 0; ///< Per-instance data of the billboards.
 
 	GLuint framebuffer = 0; ///< Offscreen framebuffer of the scene.
 	GLuint colour_buffer = 0; ///< Colour attachment of #framebuffer.
@@ -116,6 +136,9 @@ private:
 	ViewFrame frame{}; ///< The view being drawn.
 	std::vector<BoxInstance> boxes; ///< Scratch list of vehicle boxes.
 	std::unordered_map<uint32_t, size_t> previous_vehicles; ///< Index of each vehicle in the previous snapshot.
+	AtlasTextures atlas; ///< Pages of the sprite atlas.
+	std::vector<std::pair<uint, BillboardInstance>> billboards; ///< Scratch list of billboards, with their atlas page.
+	std::vector<BillboardInstance> billboard_instances; ///< Scratch list of billboards, sorted by page.
 
 	bool Init();
 	void ApplyChunkOps(bool reset, std::vector<ChunkOp> &ops);
@@ -123,6 +146,7 @@ private:
 	void EnsureFramebuffer(int width, int height);
 	void DrawScene(int width, int height);
 	void BuildBoxes(const Vec3d &camera);
+	void DrawBillboards(const Vec3d &camera, const Mat4f &view_proj);
 	void Composite(const std::array<GLint, 4> &viewport, GLuint target);
 };
 
