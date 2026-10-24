@@ -309,13 +309,15 @@ void Renderer::ApplyChunkOps(bool reset, std::vector<ChunkOp> &ops)
 	}
 
 	for (ChunkOp &op : ops) {
-		if (!op.mesh.has_value()) {
+		if (op.remove) {
 			if (auto it = this->chunks.find(op.index); it != this->chunks.end()) {
 				this->DeleteChunk(it->second);
 				this->chunks.erase(it);
 			}
 			continue;
 		}
+		/* Only the terrain is drawn yet; changes of the sprites alone do not concern it. */
+		if (!op.mesh.has_value()) continue;
 
 		GpuChunk &chunk = this->chunks[op.index];
 		if (chunk.vertex_array == 0) {

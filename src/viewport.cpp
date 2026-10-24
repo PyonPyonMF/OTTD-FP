@@ -96,6 +96,9 @@
 #include <stack>
 
 #include "fp/fp_hooks.h"
+#ifdef WITH_FP
+#	include "fp/world/fp_tile_sprites.h"
+#endif
 #include "widgets/vehicle_widget.h"
 
 #include "table/strings.h"
@@ -3859,3 +3862,268 @@ void ViewportData::CancelFollow(const Window &viewport_window)
 	this->dest_scrollpos_y = this->scrollpos_y;
 	this->follow_vehicle = VehicleID::Invalid();
 }
+
+#ifdef WITH_FP
+/*
+ * Support for the first-person mode, docs/fp/backlog.md, G2. The 3D view needs
+ * the sprites the drawing procedures of the tiles produce, and these only exist
+ * in the static state of this file. None of this runs while the 2D view draws.
+ */
+
+/** Drawer state of the first-person mode; swapped with #_vd, so the state of the 2D view stays untouched. Keeps its memory between uses. */
+static ViewportDrawer _fp_vd;
+
+/**
+ * While alive, #_vd is an empty drawer for an area, and the drawing procedures
+ * draw everything opaque, visible and in full detail, as the first-person mode
+ * needs all of it, but no overlays of the 2D interface such as reserved paths.
+ * Afterwards the 2D view finds all its state as before.
+ */
+class FpDrawerScope {
+public:
+	/**
+	 * Switch to the drawer of the first-person mode.
+	 * @param area The area to draw, as the 2D view's _vd.dpi: in viewport coordinates, with buffer and zoom.
+	 */
+	explicit FpDrawerScope(const DrawPixelInfo &area)
+	{
+		std::swap(_vd, _fp_vd);
+		_vd.dpi = area;
+		_vd.combine_sprites = SpriteCombineMode::None;
+		_vd.last_child = LAST_CHILD_NONE;
+	}
+
+	/** Back to the drawer of the 2D view. */
+	~FpDrawerScope()
+	{
+		_vd.string_sprites_to_draw.clear();
+		_vd.tile_sprites_to_draw.clear();
+		_vd.parent_sprites_to_draw.clear();
+		_vd.parent_sprites_to_sort.clear();
+		_vd.child_screen_sprites_to_draw.clear();
+		std::swap(_vd, _fp_vd);
+	}
+
+	FpDrawerScope(const FpDrawerScope &) = delete;
+	FpDrawerScope &operator=(const FpDrawerScope &) = delete;
+
+private:
+	AutoRestoreBackup<DrawPixelInfo *> cur_dpi{_cur_dpi, &_vd.dpi}; ///< Drawing procedures look at the zoom level of _cur_dpi.
+	AutoRestoreBackup<TileInfo> cur_ti{_cur_ti}; ///< The tile being drawn.
+	AutoRestoreBackup<TransparencyOptions> transparency{_transparency_opt, TransparencyOptions{}}; ///< Nothing transparent.
+	AutoRestoreBackup<TransparencyOptions> invisibility{_invisibility_opt, TransparencyOptions{}}; ///< Nothing invisible.
+	AutoRestoreBackup<DisplayOptions> display{_display_opt, DisplayOptions{_display_opt}.Set(DisplayOption::FullDetail)}; ///< Track and road details.
+	AutoRestoreBackup<bool> bounding_boxes{_draw_bounding_boxes, false}; ///< Bounding boxes change the clipping of sprites.
+	AutoRestoreBackup<bool> reservations{_settings_client.gui.show_track_reservation, false}; ///< Path reservations are an overlay of the 2D interface.
+};
+
+/**
+ * Set up #_cur_ti and the foundation state for drawing a tile, like ViewportAddLandscape() does.
+ * @param tile The tile.
+ * @return Type of the tile.
+ */
+static TileType FpBeginTile(TileIndex tile)
+{
+	TileType type = GetTileType(tile);
+	_cur_ti.x = TileX(tile) * TILE_SIZE;
+	_cur_ti.y = TileY(tile) * TILE_SIZE;
+	_cur_ti.tile = tile;
+	if (type != TileType::Void) {
+		std::tie(_cur_ti.tileh, _cur_ti.z) = GetTilePixelSlope(tile);
+	} else {
+		std::tie(_cur_ti.tileh, _cur_ti.z) = GetTilePixelSlopeOutsideMap(TileX(tile), TileY(tile));
+	}
+
+	_vd.foundation_part = FoundationPart::None;
+	_vd.foundation[FoundationPart::Normal] = -1;
+	_vd.foundation[FoundationPart::Halftile] = -1;
+	_vd.last_foundation_child[FoundationPart::Normal] = LAST_CHILD_NONE;
+	_vd.last_foundation_child[FoundationPart::Halftile] = LAST_CHILD_NONE;
+	return type;
+}
+
+/**
+ * Draw what #_vd collected, the same way ViewportDoDraw() does.
+ */
+static void FpDrawCollected()
+{
+	if (!_vd.tile_sprites_to_draw.empty()) ViewportDrawTileSprites(&_vd.tile_sprites_to_draw);
+
+	for (auto &psd : _vd.parent_sprites_to_draw) {
+		_vd.parent_sprites_to_sort.push_back(&psd);
+	}
+
+	_vp_sprite_sorter(&_vd.parent_sprites_to_sort);
+	ViewportDrawParentSprites(&_vd.parent_sprites_to_sort, &_vd.child_screen_sprites_to_draw);
+}
+
+/**
+ * Record the sprites the 2D view draws for a tile, by running the tile's own
+ * drawing procedure, so base graphics and NewGRFs take the same path,
+ * callbacks and animation included. Unlike the 2D view, nothing is clipped,
+ * transparent or left out for detail, and no selection is drawn on top.
+ * @param tile The tile; tiles of the void border are allowed.
+ * @param[out] out Receives the tile and its sprites, appended to what it holds.
+ */
+void fp::CaptureTileSprites(TileIndex tile, fp::TileSpriteCapture &out)
+{
+	assert(tile < Map::Size());
+
+	/* Viewport coordinates of the whole map stay within +/- 2^22, so nothing is ever outside this area. */
+	static const DrawPixelInfo everything{.dst_ptr = nullptr, .left = -(1 << 28), .top = -(1 << 28), .width = 1 << 29, .height = 1 << 29, .pitch = 0, .zoom = ZoomLevel::Min};
+	FpDrawerScope scope(everything);
+
+	TileType type = FpBeginTile(tile);
+
+	fp::TileSprites &sprites = out.tiles.emplace_back();
+	sprites.tile = tile;
+	sprites.origin = {_cur_ti.x, _cur_ti.y, _cur_ti.z};
+	sprites.slope = _cur_ti.tileh;
+
+	_tile_type_procs[type]->draw_tile_proc(&_cur_ti);
+
+	/* Foundations raise the tile, so the ground sprites lie on a different surface. */
+	sprites.ground_z = _cur_ti.z;
+	sprites.ground_slope = _cur_ti.tileh;
+
+	const Point reference = RemapCoords(sprites.origin.x, sprites.origin.y, sprites.origin.z);
+	auto capture = [&reference](SpriteID image, PaletteID pal, const SubSprite *sub, int x, int y) {
+		fp::CapturedSprite sprite;
+		sprite.image = image;
+		sprite.pal = pal;
+		if (sub != nullptr) sprite.sub = *sub;
+		sprite.offset = {x - reference.x, y - reference.y};
+		return sprite;
+	};
+
+	sprites.first_ground = static_cast<uint32_t>(out.ground.size());
+	for (const TileSpriteToDraw &ts : _vd.tile_sprites_to_draw) {
+		out.ground.push_back(capture(ts.image, ts.pal, ts.sub, ts.x, ts.y));
+	}
+	sprites.ground_count = static_cast<uint32_t>(out.ground.size()) - sprites.first_ground;
+
+	sprites.first_parent = static_cast<uint32_t>(out.parents.size());
+	for (const ParentSpriteToDraw &ps : _vd.parent_sprites_to_draw) {
+		fp::CapturedParentSprite &parent = out.parents.emplace_back();
+		parent.sprite = capture(ps.image, ps.pal, ps.sub, ps.x, ps.y);
+		parent.bb_min = {ps.xmin - sprites.origin.x, ps.ymin - sprites.origin.y, ps.zmin - sprites.origin.z};
+		parent.bb_max = {ps.xmax + 1 - sprites.origin.x, ps.ymax + 1 - sprites.origin.y, ps.zmax + 1 - sprites.origin.z};
+
+		/* Children are a linked list, interleaved with those of other parents; flatten it and resolve their positions. */
+		parent.first_child = static_cast<uint32_t>(out.children.size());
+		for (int index = ps.first_child; index != LAST_CHILD_NONE; index = _vd.child_screen_sprites_to_draw[index].next) {
+			const ChildScreenSpriteToDraw &cs = _vd.child_screen_sprites_to_draw[index];
+			int base_x = cs.relative ? ps.left : ps.x;
+			int base_y = cs.relative ? ps.top : ps.y;
+			out.children.push_back(capture(cs.image, cs.pal, cs.sub, base_x + cs.x, base_y + cs.y));
+		}
+		parent.child_count = static_cast<uint32_t>(out.children.size()) - parent.first_child;
+	}
+	sprites.parent_count = static_cast<uint32_t>(out.parents.size()) - sprites.first_parent;
+
+	for (FoundationPart part : {FoundationPart::Normal, FoundationPart::Halftile}) {
+		if (_vd.foundation[part] != -1) sprites.foundations[to_underlying(part)] = sprites.first_parent + _vd.foundation[part];
+	}
+}
+
+/**
+ * Draw captured sprites the way the 2D view draws the same sprites when it
+ * collects them itself; together with DrawLandscapeLikeViewport() this proves
+ * that a capture holds everything. Parent sprites outside the area are left
+ * out before sorting, exactly like AddSortableSpriteToDraw() does.
+ * @param capture The sprites, with tiles in the order the 2D view visits them: by row (x + y), then by column (y - x).
+ * @param area Where and at which zoom level to draw, like _vd.dpi of the 2D view.
+ */
+void fp::DrawCapturedTileSprites(const fp::TileSpriteCapture &capture, const DrawPixelInfo &area)
+{
+	FpDrawerScope scope(area);
+
+	for (const fp::TileSprites &tile : capture.tiles) {
+		const Point reference = RemapCoords(tile.origin.x, tile.origin.y, tile.origin.z);
+
+		for (const fp::CapturedSprite &sprite : capture.Ground(tile)) {
+			TileSpriteToDraw &ts = _vd.tile_sprites_to_draw.emplace_back();
+			ts.image = sprite.image;
+			ts.pal = sprite.pal;
+			ts.sub = sprite.sub.has_value() ? &*sprite.sub : nullptr;
+			ts.x = reference.x + sprite.offset.x;
+			ts.y = reference.y + sprite.offset.y;
+		}
+
+		for (const fp::CapturedParentSprite &parent : capture.Parents(tile)) {
+			int x = tile.origin.x + parent.bb_min.x;
+			int y = tile.origin.y + parent.bb_min.y;
+			int z = tile.origin.z + parent.bb_min.z;
+			Point pt{reference.x + parent.sprite.offset.x, reference.y + parent.sprite.offset.y};
+
+			int left, right, top, bottom;
+			if (parent.sprite.image == SPR_EMPTY_BOUNDING_BOX) {
+				int extent_x = parent.bb_max.x - parent.bb_min.x;
+				int extent_y = parent.bb_max.y - parent.bb_min.y;
+				int extent_z = parent.bb_max.z - parent.bb_min.z;
+				left = RemapCoords(x + extent_x, y, z).x;
+				right = RemapCoords(x, y + extent_y, z).x + 1;
+				top = RemapCoords(x, y, z + extent_z).y;
+				bottom = RemapCoords(x + extent_x, y + extent_y, z).y + 1;
+			} else {
+				const Sprite *spr = GetSprite(parent.sprite.image & SPRITE_MASK, SpriteType::Normal);
+				left = pt.x + spr->x_offs;
+				right = left + spr->width;
+				top = pt.y + spr->y_offs;
+				bottom = top + spr->height;
+			}
+			if (left >= area.left + area.width || right <= area.left || top >= area.top + area.height || bottom <= area.top) continue;
+
+			ParentSpriteToDraw &ps = _vd.parent_sprites_to_draw.emplace_back();
+			ps.x = pt.x;
+			ps.y = pt.y;
+			ps.left = left;
+			ps.top = top;
+			ps.image = parent.sprite.image;
+			ps.pal = parent.sprite.pal;
+			ps.sub = parent.sprite.sub.has_value() ? &*parent.sprite.sub : nullptr;
+			ps.xmin = x;
+			ps.ymin = y;
+			ps.zmin = z;
+			ps.xmax = tile.origin.x + parent.bb_max.x - 1;
+			ps.ymax = tile.origin.y + parent.bb_max.y - 1;
+			ps.zmax = tile.origin.z + parent.bb_max.z - 1;
+			ps.first_child = LAST_CHILD_NONE;
+
+			/* Children were resolved to positions relative to the tile; draw them relative to the origin of the parent. */
+			for (const fp::CapturedSprite &child : capture.Children(parent)) {
+				int32_t child_id = static_cast<int32_t>(_vd.child_screen_sprites_to_draw.size());
+				if (ps.first_child == LAST_CHILD_NONE) {
+					ps.first_child = child_id;
+				} else {
+					_vd.child_screen_sprites_to_draw.back().next = child_id;
+				}
+
+				ChildScreenSpriteToDraw &cs = _vd.child_screen_sprites_to_draw.emplace_back();
+				cs.image = child.image;
+				cs.pal = child.pal;
+				cs.sub = child.sub.has_value() ? &*child.sub : nullptr;
+				cs.x = child.offset.x - parent.sprite.offset.x;
+				cs.y = child.offset.y - parent.sprite.offset.y;
+				cs.relative = false;
+				cs.next = LAST_CHILD_NONE;
+			}
+		}
+	}
+
+	FpDrawCollected();
+}
+
+/**
+ * Draw the landscape of an area exactly as the 2D view does, but without
+ * vehicles, signs and text effects, and with the drawing settings of
+ * CaptureTileSprites(): the reference to check captures against.
+ * @param area Where and at which zoom level to draw, like _vd.dpi of the 2D view.
+ */
+void fp::DrawLandscapeLikeViewport(const DrawPixelInfo &area)
+{
+	FpDrawerScope scope(area);
+	ViewportAddLandscape();
+	FpDrawCollected();
+}
+#endif /* WITH_FP */

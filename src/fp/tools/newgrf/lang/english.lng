@@ -1,0 +1,5 @@
+##grflangid 0x01
+STR_GRF_NAME    :OTTD-FP test houses
+STR_GRF_DESC    :Test fixture of the first-person mode: replaces all town houses with two NewGRF houses, chosen by a callback, with random colours and a 32 bpp variant.
+STR_HOUSE_TALL  :FP test tower
+STR_HOUSE_SHORT :FP test cottage

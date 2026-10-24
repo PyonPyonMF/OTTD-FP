@@ -10,9 +10,12 @@
 #ifndef FP_WINDOW_H
 #define FP_WINDOW_H
 
+#include "../../core/geometry_type.hpp"
+
 namespace fp {
 
 void ShowFirstPersonWindow();
+Point MainViewportCentre();
 
 } // namespace fp
 
