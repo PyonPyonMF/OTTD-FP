@@ -41,11 +41,19 @@ void Runtime::Activate(int x, int y)
 	this->active = true;
 	Bridge::Get().Acquire();
 	this->ResetWorld();
+	this->LookAt(x, y, 450.0, 220.0, -0.75 * std::numbers::pi); // Towards the north corner of the map, i.e. up in the 2D view.
+}
 
-	const double distance = 450.0;
-	const double height = 220.0;
-	const double yaw = -0.75 * std::numbers::pi; // Towards the north corner of the map, i.e. up in the 2D view.
-
+/**
+ * Put the camera behind and above a point, looking at it.
+ * @param x X coordinate of the point to look at, in world units.
+ * @param y Y coordinate of the point to look at, in world units.
+ * @param distance Horizontal distance from the point, in metres.
+ * @param height Height above the ground at the point, in metres.
+ * @param yaw Direction to look in, in radians counter-clockwise from the X axis.
+ */
+void Runtime::LookAt(int x, int y, double distance, double height, double yaw)
+{
 	CameraPose pose;
 	pose.yaw = yaw;
 	pose.pitch = -std::atan2(height, distance);
@@ -64,6 +72,7 @@ void Runtime::Deactivate()
 	this->active = false;
 	Bridge::Get().Release();
 	this->mirror.Reset({}, this->scale);
+	this->splines.Reset({}, this->scale);
 	this->handoff.Deactivate();
 }
 
@@ -73,6 +82,7 @@ void Runtime::ResetWorld()
 	this->session = Bridge::Get().GetSession();
 	this->scale = MetricScale{};
 	this->mirror.Reset(ChunkGrid(Map::SizeX(), Map::SizeY()), this->scale);
+	this->splines.Reset(ChunkGrid(Map::SizeX(), Map::SizeY()), this->scale);
 	this->spectator.SetBounds(this->scale.TileLength() * Map::SizeX(), this->scale.TileLength() * Map::SizeY());
 	this->reset_pending = true;
 }
@@ -118,6 +128,8 @@ void Runtime::Update(const InputState &input, uint delta_ms, const Rect &view_re
 	bridge.TakeDirtyChunks(this->dirty);
 	this->mirror.MarkDirty(this->dirty);
 	this->mirror.Update(camera.position, VIEW_DISTANCE, MESH_BUDGET, this->ops);
+	this->splines.MarkDirty(this->dirty);
+	this->splines.Update(camera.position, VIEW_DISTANCE, SPLINE_BUDGET, this->overlay_ops);
 
 	ViewFrame frame;
 	frame.active = true;
@@ -128,6 +140,7 @@ void Runtime::Update(const InputState &input, uint delta_ms, const Rect &view_re
 	frame.view_rect = view_rect;
 	frame.visible = std::move(visible);
 	this->handoff.Publish(frame, std::move(this->ops), std::exchange(this->reset_pending, false));
+	this->handoff.PublishOverlay(std::move(this->overlay_ops), this->splines.TakeOverlayReset());
 }
 
 } // namespace fp

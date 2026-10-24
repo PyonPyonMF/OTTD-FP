@@ -35,6 +35,8 @@ struct ViewUpdate {
 	ViewFrame frame{}; ///< The latest view state.
 	bool reset_chunks = false; ///< Whether the renderer must drop all chunks before applying #ops.
 	std::vector<ChunkOp> ops; ///< Chunk changes, to apply in order.
+	bool reset_overlay = false; ///< Whether the renderer must drop all overlay meshes before applying #overlay_ops.
+	std::vector<ChunkOp> overlay_ops; ///< Changes of the debug overlay, e.g. of the spline graph; meshes per chunk like #ops.
 };
 
 /** What the renderer reports back. */
@@ -43,6 +45,7 @@ struct RendererStatus {
 	bool failed = false; ///< Whether the renderer could not start.
 	std::string info; ///< OpenGL renderer and version, or why the renderer failed.
 	uint chunks = 0; ///< Chunks on the GPU.
+	uint overlay_chunks = 0; ///< Chunks of the debug overlay on the GPU.
 	uint vehicles = 0; ///< Vehicles drawn in the last frame.
 	float frame_ms = 0; ///< Time spent rendering the last frame, in milliseconds.
 };
@@ -58,6 +61,7 @@ struct RendererStatus {
 class ViewHandoff {
 public:
 	void Publish(const ViewFrame &frame, std::vector<ChunkOp> &&ops, bool reset_chunks);
+	void PublishOverlay(std::vector<ChunkOp> &&ops, bool reset);
 	void Deactivate();
 	bool Take(ViewUpdate &update);
 
@@ -71,6 +75,8 @@ private:
 	ViewFrame frame{}; ///< Latest view state.
 	std::vector<ChunkOp> ops; ///< Chunk changes not yet taken.
 	bool reset_chunks = false; ///< Whether the renderer must drop all chunks before applying #ops.
+	std::vector<ChunkOp> overlay_ops; ///< Overlay changes not yet taken.
+	bool reset_overlay = false; ///< Whether the renderer must drop all overlay meshes before applying #overlay_ops.
 	bool fresh = false; ///< Whether anything was published since the last take.
 	bool context_lost = false; ///< Whether the renderer lost its chunks, so all must be sent again.
 	RendererStatus status{}; ///< Latest status of the renderer.

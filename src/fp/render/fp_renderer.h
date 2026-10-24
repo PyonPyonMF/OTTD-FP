@@ -112,13 +112,14 @@ private:
 	int framebuffer_height = 0; ///< Height of #framebuffer.
 
 	std::unordered_map<ChunkIndex, GpuChunk> chunks; ///< Chunks on the GPU.
+	std::unordered_map<ChunkIndex, GpuChunk> overlay_chunks; ///< Meshes of the debug overlay on the GPU, per chunk.
 	ViewUpdate update{}; ///< Scratch space for taking updates from the hand-over.
 	ViewFrame frame{}; ///< The view being drawn.
 	std::vector<BoxInstance> boxes; ///< Scratch list of vehicle boxes.
 	std::unordered_map<uint32_t, size_t> previous_vehicles; ///< Index of each vehicle in the previous snapshot.
 
 	bool Init();
-	void ApplyChunkOps(bool reset, std::vector<ChunkOp> &ops);
+	void ApplyChunkOps(std::unordered_map<ChunkIndex, GpuChunk> &target, bool reset, std::vector<ChunkOp> &ops);
 	void DeleteChunk(GpuChunk &chunk);
 	void EnsureFramebuffer(int width, int height);
 	void DrawScene(int width, int height);

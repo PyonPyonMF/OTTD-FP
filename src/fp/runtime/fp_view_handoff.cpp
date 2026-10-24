@@ -34,6 +34,24 @@ void ViewHandoff::Publish(const ViewFrame &frame, std::vector<ChunkOp> &&ops, bo
 	this->fresh = true;
 }
 
+/**
+ * Publish changes of the debug overlay. The overlay is drawn over the
+ * terrain, so changes only take effect together with a frame.
+ * @param ops Overlay changes; appended to those not yet taken.
+ * @param reset Whether the renderer must drop all overlay meshes first.
+ */
+void ViewHandoff::PublishOverlay(std::vector<ChunkOp> &&ops, bool reset)
+{
+	std::lock_guard<std::mutex> guard(this->lock);
+
+	if (reset) {
+		this->overlay_ops.clear();
+		this->reset_overlay = true;
+	}
+	std::move(ops.begin(), ops.end(), std::back_inserter(this->overlay_ops));
+	ops.clear();
+}
+
 /** There is no view anymore; the renderer should release its resources. */
 void ViewHandoff::Deactivate()
 {
@@ -42,6 +60,8 @@ void ViewHandoff::Deactivate()
 	this->frame = {};
 	this->ops.clear();
 	this->reset_chunks = true;
+	this->overlay_ops.clear();
+	this->reset_overlay = true;
 	this->fresh = true;
 }
 
@@ -60,6 +80,9 @@ bool ViewHandoff::Take(ViewUpdate &update)
 	update.reset_chunks = std::exchange(this->reset_chunks, false);
 	update.ops.clear();
 	update.ops.swap(this->ops);
+	update.reset_overlay = std::exchange(this->reset_overlay, false);
+	update.overlay_ops.clear();
+	update.overlay_ops.swap(this->overlay_ops);
 	this->fresh = false;
 	return true;
 }

@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "../roles/fp_spectator.h"
+#include "../world/fp_splines_mirror.h"
 #include "fp_view_handoff.h"
 
 namespace fp {
@@ -30,11 +31,13 @@ class Runtime {
 public:
 	static constexpr double VIEW_DISTANCE = 6000.0; ///< Radius around the camera in which the world is built, in metres.
 	static constexpr std::chrono::microseconds MESH_BUDGET{3000}; ///< Time per frame that may be spent on meshing chunks.
+	static constexpr std::chrono::microseconds SPLINE_BUDGET{1500}; ///< Time per frame that may be spent on capturing chunks for the spline graph.
 
 	static Runtime &Get();
 
 	void Activate(int x, int y);
 	void Deactivate();
+	void LookAt(int x, int y, double distance, double height, double yaw);
 
 	/**
 	 * Whether a first-person view is open.
@@ -57,6 +60,18 @@ public:
 	const WorldMirror &GetWorldMirror() const { return this->mirror; }
 
 	/**
+	 * The spline graph of tracks, roads and sidewalks, with the chunks it covers.
+	 * @return The spline mirror.
+	 */
+	const SplineMirror &GetSplines() const { return this->splines; }
+
+	/**
+	 * Switch the debug overlay of the spline graph on or off.
+	 * @param enabled Whether to draw the overlay.
+	 */
+	void SetDebugSplines(bool enabled) { this->splines.SetOverlay(enabled); }
+
+	/**
 	 * The metric scales in use.
 	 * @return The scales.
 	 */
@@ -75,9 +90,11 @@ private:
 	MetricScale scale{}; ///< The metric scales.
 	Spectator spectator; ///< The spectator role.
 	WorldMirror mirror; ///< The world mirror.
+	SplineMirror splines; ///< The spline graph.
 	ViewHandoff handoff; ///< Hand-over to the renderer.
 	std::vector<ChunkIndex> dirty; ///< Scratch list of changed chunks.
 	std::vector<ChunkOp> ops; ///< Scratch list of chunk changes.
+	std::vector<ChunkOp> overlay_ops; ///< Scratch list of changes of the debug overlay.
 
 	void ResetWorld();
 	double GroundHeight(double x, double y) const;

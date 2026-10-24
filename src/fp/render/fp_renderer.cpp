@@ -253,10 +253,11 @@ bool Renderer::Init()
  */
 void Renderer::Shutdown(bool context_lost)
 {
-	bool had_chunks = !this->chunks.empty();
+	bool had_chunks = !this->chunks.empty() || !this->overlay_chunks.empty();
 
 	if (_fpgl.glDeleteProgram != nullptr) {
 		for (auto &[index, chunk] : this->chunks) this->DeleteChunk(chunk);
+		for (auto &[index, chunk] : this->overlay_chunks) this->DeleteChunk(chunk);
 
 		_fpgl.glDeleteProgram(this->sky_program);
 		_fpgl.glDeleteProgram(this->terrain_program);
@@ -272,6 +273,7 @@ void Renderer::Shutdown(bool context_lost)
 	}
 
 	this->chunks.clear();
+	this->overlay_chunks.clear();
 	this->sky_program = this->terrain_program = this->box_program = 0;
 	this->empty_vertex_array = this->box_vertex_array = 0;
 	this->box_vertex_buffer = this->box_index_buffer = this->box_instance_buffer = 0;
@@ -297,27 +299,28 @@ void Renderer::DeleteChunk(GpuChunk &chunk)
 }
 
 /**
- * Apply chunk changes from the world mirror.
+ * Apply chunk changes from the world mirror or the debug overlay.
+ * @param target The chunks to change.
  * @param reset Whether to drop all chunks first.
  * @param ops The changes, in order; emptied afterwards.
  */
-void Renderer::ApplyChunkOps(bool reset, std::vector<ChunkOp> &ops)
+void Renderer::ApplyChunkOps(std::unordered_map<ChunkIndex, GpuChunk> &target, bool reset, std::vector<ChunkOp> &ops)
 {
 	if (reset) {
-		for (auto &[index, chunk] : this->chunks) this->DeleteChunk(chunk);
-		this->chunks.clear();
+		for (auto &[index, chunk] : target) this->DeleteChunk(chunk);
+		target.clear();
 	}
 
 	for (ChunkOp &op : ops) {
 		if (!op.mesh.has_value()) {
-			if (auto it = this->chunks.find(op.index); it != this->chunks.end()) {
+			if (auto it = target.find(op.index); it != target.end()) {
 				this->DeleteChunk(it->second);
-				this->chunks.erase(it);
+				target.erase(it);
 			}
 			continue;
 		}
 
-		GpuChunk &chunk = this->chunks[op.index];
+		GpuChunk &chunk = target[op.index];
 		if (chunk.vertex_array == 0) {
 			_fpgl.glGenVertexArrays(1, &chunk.vertex_array);
 			_fpgl.glGenBuffers(1, &chunk.vertex_buffer);
@@ -554,24 +557,33 @@ void Renderer::DrawScene(int width, int height)
 	}
 
 	const double half_chunk = scale.TileLength() * CHUNK_SIZE / 2.0;
-	for (const auto &[index, chunk] : this->chunks) {
-		if (chunk.index_count == 0) continue;
+	auto draw_chunks = [&](const std::unordered_map<ChunkIndex, GpuChunk> &chunks) {
+		for (const auto &[index, chunk] : chunks) {
+			if (chunk.index_count == 0) continue;
 
-		Vec3d relative = chunk.origin - camera.position;
-		Vec3d centre = relative + Vec3d{half_chunk, half_chunk, (chunk.min_z + chunk.max_z) / 2.0};
-		double half_height = (chunk.max_z - chunk.min_z) / 2.0;
-		double radius = std::sqrt(2 * half_chunk * half_chunk + half_height * half_height);
-		if (std::hypot(centre.x, centre.y) - radius > view_distance) continue;
+			Vec3d relative = chunk.origin - camera.position;
+			Vec3d centre = relative + Vec3d{half_chunk, half_chunk, (chunk.min_z + chunk.max_z) / 2.0};
+			double half_height = (chunk.max_z - chunk.min_z) / 2.0;
+			double radius = std::sqrt(2 * half_chunk * half_chunk + half_height * half_height);
+			if (std::hypot(centre.x, centre.y) - radius > view_distance) continue;
 
-		bool outside = std::any_of(planes.begin(), planes.end(), [&](const std::array<float, 4> &p) {
-			double distance = p[0] * centre.x + p[1] * centre.y + p[2] * centre.z + p[3];
-			return distance < -radius * std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
-		});
-		if (outside) continue;
+			bool outside = std::any_of(planes.begin(), planes.end(), [&](const std::array<float, 4> &p) {
+				double distance = p[0] * centre.x + p[1] * centre.y + p[2] * centre.z + p[3];
+				return distance < -radius * std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
+			});
+			if (outside) continue;
 
-		_fpgl.glUniform3f(this->terrain_uniforms.offset, static_cast<float>(relative.x), static_cast<float>(relative.y), static_cast<float>(relative.z));
-		_fpgl.glBindVertexArray(chunk.vertex_array);
-		_fpgl.glDrawElements(GL_TRIANGLES, chunk.index_count, GL_UNSIGNED_SHORT, nullptr);
+			_fpgl.glUniform3f(this->terrain_uniforms.offset, static_cast<float>(relative.x), static_cast<float>(relative.y), static_cast<float>(relative.z));
+			_fpgl.glBindVertexArray(chunk.vertex_array);
+			_fpgl.glDrawElements(GL_TRIANGLES, chunk.index_count, GL_UNSIGNED_SHORT, nullptr);
+		}
+	};
+	draw_chunks(this->chunks);
+
+	/* Debug overlay, with the terrain shading but without the tile grid. */
+	if (!this->overlay_chunks.empty()) {
+		_fpgl.glUniform1f(this->terrain_uniforms.grid_strength, 0.0f);
+		draw_chunks(this->overlay_chunks);
 	}
 
 	/* Vehicles. */
@@ -627,6 +639,7 @@ void Renderer::Paint()
 		if (this->initialised) this->Shutdown(false);
 		this->failed = false;
 		this->update.ops.clear();
+		this->update.overlay_ops.clear();
 		if (fresh) handoff.SetRendererStatus({});
 		return;
 	}
@@ -636,6 +649,7 @@ void Renderer::Paint()
 			if (!this->failed) Debug(Facility::Fp, Severity::Error, "First-person renderer unavailable: {}", this->info);
 			this->failed = true;
 			this->update.ops.clear();
+			this->update.overlay_ops.clear();
 			RendererStatus status;
 			status.failed = true;
 			status.info = this->info;
@@ -647,7 +661,10 @@ void Renderer::Paint()
 	auto start = std::chrono::steady_clock::now();
 	GLStateGuard guard;
 
-	if (fresh) this->ApplyChunkOps(this->update.reset_chunks, this->update.ops);
+	if (fresh) {
+		this->ApplyChunkOps(this->chunks, this->update.reset_chunks, this->update.ops);
+		this->ApplyChunkOps(this->overlay_chunks, this->update.reset_overlay, this->update.overlay_ops);
+	}
 
 	int width = this->frame.view_rect.Width();
 	int height = this->frame.view_rect.Height();
@@ -661,6 +678,7 @@ void Renderer::Paint()
 	status.running = true;
 	status.info = this->info;
 	status.chunks = static_cast<uint>(this->chunks.size());
+	status.overlay_chunks = static_cast<uint>(this->overlay_chunks.size());
 	status.vehicles = static_cast<uint>(this->boxes.size());
 	status.frame_ms = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count();
 	handoff.SetRendererStatus(status);

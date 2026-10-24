@@ -14,6 +14,7 @@
 #include "../sim/fp_bridge.h"
 #include "../../console_func.h"
 #include "../../console_internal.h"
+#include "../../core/string_consumer.hpp"
 #include "../../map_func.h"
 #include "../../network/network.h"
 #include "../../openttd.h"
@@ -43,6 +44,15 @@ static void PrintStatus()
 		const WorldMirror::Statistics &mirror = runtime.GetWorldMirror().GetStatistics();
 		IConsolePrint(CC_DEFAULT, "  world mirror: {} chunks built, {} pending, {} meshed, {} changes without effect on the terrain",
 				mirror.built_chunks, mirror.pending_chunks, mirror.meshed_chunks, mirror.unchanged_chunks);
+
+		const SplineMirror &splines = runtime.GetSplines();
+		const SplineMirror::Statistics &spline_stats = splines.GetStatistics();
+		const SplineGraph::Statistics &graph = splines.GetGraph().GetStatistics();
+		IConsolePrint(CC_DEFAULT, "  spline graph: {} chunks, {} pending; pieces: {} rail, {} road, {} tram, {} sidewalk; {} ports; debug overlay {}",
+				spline_stats.built_chunks, spline_stats.pending_chunks,
+				graph.pieces[to_underlying(SplineLayer::Rail)], graph.pieces[to_underlying(SplineLayer::Road)],
+				graph.pieces[to_underlying(SplineLayer::Tram)], graph.pieces[to_underlying(SplineLayer::Sidewalk)],
+				graph.ports, splines.HasOverlay() ? "on" : "off");
 	}
 
 	RendererStatus status = runtime.GetHandoff().GetRendererStatus();
@@ -50,9 +60,40 @@ static void PrintStatus()
 		IConsolePrint(CC_ERROR, "Renderer: failed: {}", status.info);
 	} else if (status.running) {
 		IConsolePrint(CC_INFO, "Renderer: {}", status.info);
-		IConsolePrint(CC_DEFAULT, "  {} chunks on the GPU, {} vehicles drawn, {:.2f} ms per frame", status.chunks, status.vehicles, status.frame_ms);
+		IConsolePrint(CC_DEFAULT, "  {} chunks on the GPU, {} overlay chunks, {} vehicles drawn, {:.2f} ms per frame", status.chunks, status.overlay_chunks, status.vehicles, status.frame_ms);
 	} else {
 		IConsolePrint(CC_INFO, "Renderer: not running (needs an OpenGL video driver and an open first-person view).");
+	}
+}
+
+/** Compare the spline graph with the simulation and print the result. */
+static void PrintSplineCheck()
+{
+	Runtime &runtime = Runtime::Get();
+	if (!runtime.IsActive()) {
+		IConsolePrint(CC_ERROR, "The spline graph is only built while the first-person view is open.");
+		return;
+	}
+
+	const SplineMirror &splines = runtime.GetSplines();
+	const SplineMirror::Statistics &stats = splines.GetStatistics();
+	IConsolePrint(CC_INFO, "Spline graph: {} chunks, {} pending, {} captured, {} changes without effect on tracks and roads, {} pieces fitted.",
+			stats.built_chunks, stats.pending_chunks, stats.captured_chunks, stats.unchanged_chunks, splines.GetGraph().GetStatistics().refits);
+
+	auto start = std::chrono::steady_clock::now();
+	SplineCheck check = splines.Check();
+	double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+	IConsolePrint(CC_DEFAULT, "  {} pieces and {} joints checked in {:.1f} ms.", check.pieces, check.joints, ms);
+	IConsolePrint(CC_DEFAULT, "  joints: largest gap {:.2e} m, largest kink {:.2e} rad", check.max_gap, check.max_kink);
+	if (check.crossing_joints > 0) {
+		IConsolePrint(CC_DEFAULT, "  {} joints at crossovers: largest kink {:.1f} degrees, where a line crosses another branch", check.crossing_joints, check.max_crossing_kink * 180 / std::numbers::pi);
+	}
+	IConsolePrint(CC_DEFAULT, "  surface model vs. GetSlopePixelZ(): largest difference {:.2f} units", check.max_surface_error);
+	IConsolePrint(CC_DEFAULT, "  curves vs. straight chords: rail up to {:.2f} m aside, roads up to {:.2f} m (they turn around the corner)",
+			check.max_chord_distance[to_underlying(SplineLayer::Rail)], check.max_chord_distance[to_underlying(SplineLayer::Road)]);
+	IConsolePrint(CC_DEFAULT, "  vertical profiles up to {:.2f} m above or below the surface, because of the blends between grades", check.max_profile_offset);
+	if (std::isfinite(check.min_rail_radius)) {
+		IConsolePrint(CC_DEFAULT, "  tightest rail curve: radius {:.1f} m on tile {}x{}", check.min_rail_radius, check.tightest_rail.x, check.tightest_rail.y);
 	}
 }
 
@@ -64,9 +105,13 @@ static void PrintStatus()
 static bool ConFirstPerson(std::span<std::string_view> argv)
 {
 	if (argv.empty()) {
-		IConsolePrint(CC_HELP, "Control the first-person mode. Usage: 'fp [view|status]'.");
-		IConsolePrint(CC_HELP, "  view:   open the first-person view (default).");
-		IConsolePrint(CC_HELP, "  status: show the state of the sim bridge, the world mirror and the renderer.");
+		IConsolePrint(CC_HELP, "Control the first-person mode. Usage: 'fp [view|status|look|splines|debug_splines [on|off]]'.");
+		IConsolePrint(CC_HELP, "  view:          open the first-person view (default).");
+		IConsolePrint(CC_HELP, "  status:        show the state of the sim bridge, the world mirror and the renderer.");
+		IConsolePrint(CC_HELP, "  look <x> <y> [distance] [height] [heading]: put the camera behind and above a tile, looking at it;");
+		IConsolePrint(CC_HELP, "                 metres and degrees, heading 0 looks south-west along X, 90 south-east along Y.");
+		IConsolePrint(CC_HELP, "  splines:       check the spline graph of tracks and roads against the simulation.");
+		IConsolePrint(CC_HELP, "  debug_splines: show or hide the spline graph in the first-person view.");
 		return true;
 	}
 
@@ -77,6 +122,41 @@ static bool ConFirstPerson(std::span<std::string_view> argv)
 	}
 	if (action == "status") {
 		PrintStatus();
+		return true;
+	}
+	if (action == "look") {
+		Runtime &runtime = Runtime::Get();
+		if (!runtime.IsActive() || argv.size() < 4) return false;
+		auto tile_x = ParseInteger<uint>(argv[2]);
+		auto tile_y = ParseInteger<uint>(argv[3]);
+		if (!tile_x.has_value() || !tile_y.has_value() || *tile_x >= Map::SizeX() || *tile_y >= Map::SizeY()) return false;
+		std::array<int, 3> view{120, 60, 225};
+		for (size_t i = 0; i < view.size() && 4 + i < argv.size(); i++) {
+			auto value = ParseInteger<int>(argv[4 + i]);
+			if (!value.has_value()) return false;
+			view[i] = *value;
+		}
+		runtime.LookAt(*tile_x * TILE_SIZE + TILE_SIZE / 2, *tile_y * TILE_SIZE + TILE_SIZE / 2, view[0], view[1], view[2] * std::numbers::pi / 180.0);
+		return true;
+	}
+	if (action == "splines") {
+		PrintSplineCheck();
+		return true;
+	}
+	if (action == "debug_splines") {
+		Runtime &runtime = Runtime::Get();
+		bool enabled = !runtime.GetSplines().HasOverlay();
+		if (argv.size() > 2) {
+			if (argv[2] == "on") {
+				enabled = true;
+			} else if (argv[2] == "off") {
+				enabled = false;
+			} else {
+				return false;
+			}
+		}
+		runtime.SetDebugSplines(enabled);
+		IConsolePrint(CC_INFO, "Spline graph overlay {}.", enabled ? "on" : "off");
 		return true;
 	}
 	return false;
