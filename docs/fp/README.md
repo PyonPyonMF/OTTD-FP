@@ -121,6 +121,22 @@ cmake .. -DOPTION_FP=OFF
 как его рисует 2D-вид: все слои `VehicleSpriteSeq` с палитрой компании.
 Палитра — число, `none`, `crash`, `black` или `company:<0–15>`.
 
+Дампы `fp sprite_dump` (OpenGFX на заставке и тестовый 32bpp NewGRF,
+см. «Тесты»; увеличено):
+
+![Дампы спрайтов](images/g1_sprite_dumps.png)
+
+Билборды `fp sprite_show` в городе на заставке: офис, тот же офис с
+палитрой 797 и паровоз в цвете компании; вблизи пиксели остаются чёткими:
+
+![Билборды в городе](images/g1_billboards_town.jpg)
+![Билборды вблизи](images/g1_billboards_closeup.jpg)
+
+Новая игра с тестовым NewGRF: в 2D трава уже из NewGRF, в 3D — 32bpp-паровоз
+с маской в цвете компании 4 и 4x-трава:
+
+![32bpp NewGRF](images/g1_newgrf_32bpp.jpg)
+
 ## Карта модулей
 
 ```
