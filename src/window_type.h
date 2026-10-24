@@ -743,6 +743,12 @@ enum class WindowClass : uint16_t {
 	 */
 	Help,
 
+	/**
+	 * First-person view window; %Window numbers:
+	 *   - 0 = #FirstPersonViewWidgets
+	 */
+	FirstPersonView,
+
 	Invalid = 0xFFFF, ///< Invalid window.
 };
 
