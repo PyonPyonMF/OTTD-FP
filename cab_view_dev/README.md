@@ -1,3 +1,7 @@
+> Notes of the authors of the cab view (in Czech), kept as they were in
+> vaclavloubek/OpenTTD 15.3-cabview-alpha1. How this fork builds on it, with
+> walking and riding as a passenger: [docs/fp/README.md](../docs/fp/README.md).
+
 # Pohled z kabiny – poznámky k vývoji
 
 Tahle složka není součást hry, jsou to jen pomůcky pro vývoj a testování větve `cab-view`.
