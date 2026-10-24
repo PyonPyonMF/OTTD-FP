@@ -15,6 +15,9 @@
 # Needs: Xvfb, xdotool, ImageMagick (import) and OpenGFX
 # (Debian/Ubuntu: apt install xvfb xdotool imagemagick openttd-opengfx).
 # OPENGFX_DIR overrides where OpenGFX is looked for.
+#
+# FP_NEWGRF=<file.grf> runs a new game (seed FP_SEED, default 42) with that
+# NewGRF instead of the title game; src/fp/tools/newgrf/ builds a test NewGRF.
 
 set -u
 
@@ -42,6 +45,14 @@ rm -f "$OUT"/*.png "$OUT"/console.log "$OUT"/openttd.log
 TEST_HOME=$(mktemp -d)
 mkdir -p "$TEST_HOME/.local/share/openttd/baseset"
 ln -s "$OPENGFX_DIR" "$TEST_HOME/.local/share/openttd/baseset/opengfx"
+
+if [ -n "${FP_NEWGRF:-}" ]; then
+	[ -f "$FP_NEWGRF" ] || { echo "Not a file: $FP_NEWGRF" >&2; exit 2; }
+	mkdir -p "$TEST_HOME/.local/share/openttd/newgrf" "$TEST_HOME/.config/openttd"
+	cp "$FP_NEWGRF" "$TEST_HOME/.local/share/openttd/newgrf/"
+	# NewGRFs of the [newgrf] section are used for new games.
+	printf '[newgrf]\n%s = \n' "$(basename "$FP_NEWGRF")" > "$TEST_HOME/.config/openttd/openttd.cfg"
+fi
 
 XVFB_PID=""
 OTTD_PID=""
@@ -76,6 +87,12 @@ console() {
 }
 
 console "script $OUT/console.log"
+if [ -n "${FP_NEWGRF:-}" ]; then
+	# Starting a game closes the console itself.
+	xdotool key grave; sleep 0.7
+	xdotool type --delay 30 "newgame ${FP_SEED:-42}"; xdotool key Return
+	sleep 15
+fi
 console "fp view"
 sleep 6
 import -window root "$OUT/1_open.png"
@@ -105,6 +122,9 @@ done
 console "fp status"
 console "script"
 sleep 1
+
+# Images written by console commands, e.g. 'fp capture <x> <y> <name>', go to the screenshot directory.
+cp "$TEST_HOME"/.local/share/openttd/screenshot/*.png "$OUT"/ 2>/dev/null
 
 if ! kill -0 "$OTTD_PID" 2>/dev/null; then
 	echo "OpenTTD exited early; see $OUT/openttd.log" >&2

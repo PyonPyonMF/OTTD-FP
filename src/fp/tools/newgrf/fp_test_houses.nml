@@ -1,0 +1,74 @@
+/*
+ * Test fixture of the first-person mode (OTTD-FP), see docs/fp/README.md.
+ *
+ * All original town houses are replaced by two NewGRF houses, so every town
+ * of a new game consists of NewGRF tiles. They exercise what the first-person
+ * mode must get from NewGRFs through the same path as the 2D view:
+ * - a switch (varaction2 callback chain) picks the layout by tile position;
+ * - random colours recolour the walls (recolour palette in the sprite);
+ * - the tower also has a 32 bpp variant of its sprite.
+ *
+ * Built by build_fp_test_newgrf.sh with NML (pip install nml).
+ */
+
+grf {
+	grfid: "FP\02\01";
+	name: string(STR_GRF_NAME);
+	desc: string(STR_GRF_DESC);
+	version: 1;
+	min_compatible_version: 1;
+}
+
+cargotable { PASS, MAIL }
+
+disable_item(FEAT_HOUSES);
+
+spriteset(spriteset_tower, "fp_test_houses.png") { [0, 0, 64, 88, -31, -56] }
+alternative_sprites(spriteset_tower, ZOOM_LEVEL_NORMAL, BIT_DEPTH_32BPP, "fp_test_houses_32bpp.png") { [0, 0, 64, 88, -31, -56] }
+spriteset(spriteset_cottage, "fp_test_houses.png") { [80, 0, 64, 56, -31, -24] }
+
+spritelayout spritelayout_tower {
+	ground { sprite: GROUNDSPRITE_NORMAL; }
+	building {
+		sprite: spriteset_tower;
+		recolour_mode: RECOLOUR_REMAP;
+		palette: PALETTE_USE_DEFAULT;
+		xextent: 16; yextent: 16; zextent: 56;
+	}
+}
+
+spritelayout spritelayout_cottage {
+	ground { sprite: GROUNDSPRITE_NORMAL; }
+	building {
+		sprite: spriteset_cottage;
+		recolour_mode: RECOLOUR_REMAP;
+		palette: PALETTE_USE_DEFAULT;
+		xextent: 16; yextent: 16; zextent: 24;
+	}
+}
+
+/* Checkerboard of towers and cottages. */
+switch (FEAT_HOUSES, SELF, switch_house_layout, (x_coordinate ^ y_coordinate) & 1) {
+	0: spritelayout_tower;
+	spritelayout_cottage;
+}
+
+item(FEAT_HOUSES, house_fp_tower) {
+	property {
+		substitute: 2;
+		years_available: [0, 0xFFFF];
+		population: 60;
+		mail_multiplier: 20;
+		accepted_cargos: [[PASS, 1/8], [MAIL, 1/8]];
+		local_authority_impact: 120;
+		removal_cost_multiplier: 50;
+		name: string(STR_HOUSE_TALL);
+		availability_mask: [ALL_TOWNZONES, bitmask(CLIMATE_TEMPERATE, CLIMATE_ARCTIC, CLIMATE_TROPICAL)];
+		probability: 15;
+		minimum_lifetime: 10;
+		random_colours: [COLOUR_RED, COLOUR_BLUE, COLOUR_GREEN, COLOUR_YELLOW];
+	}
+	graphics {
+		default: switch_house_layout;
+	}
+}
