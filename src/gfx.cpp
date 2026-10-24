@@ -32,6 +32,7 @@
 #include "safeguards.h"
 
 DirectionKeys _dirkeys; ///< Pressed direction keys.
+WalkKeys _walkkeys; ///< Pressed keys for walking in the first-person view.
 bool _fullscreen;
 Support8bpp _support8bpp; ///< State of the support for 8bpp graphics.
 CursorVars _cursor;

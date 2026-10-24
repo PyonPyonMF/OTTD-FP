@@ -4730,6 +4730,7 @@ STR_VEHICLE_VIEW_TRAIN_IGNORE_SIGNAL_TOOLTIP                    :{BLACK}Заст
 STR_VEHICLE_VIEW_TRAIN_REVERSE_TOOLTIP                          :{BLACK}Развернуть поезд
 STR_VEHICLE_VIEW_ROAD_VEHICLE_REVERSE_TOOLTIP                   :{BLACK}Принудительно развернуть автомобиль
 STR_VEHICLE_VIEW_ORDER_LOCATION_TOOLTIP                         :{BLACK}Показать станцию назначения в основном окне. Ctrl+щелчок - показать в дополнительном окне.
+STR_VEHICLE_VIEW_CAB_VIEW_TOOLTIP                               :{BLACK}Открыть вид из кабины: большое окно, которое едет вместе с транспортом и смотрит вперёд по ходу движения
 
 ###length VEHICLE_TYPES
 STR_VEHICLE_VIEW_TRAIN_REFIT_TOOLTIP                            :{BLACK}Переоборудование поезда для перевозки иного типа груза
@@ -4782,6 +4783,59 @@ STR_VEHICLE_STATUS_CANNOT_REACH_DEPOT_SERVICE_VEL               :{LTBLUE}{1:VELO
 # Vehicle stopped/started animations
 STR_VEHICLE_COMMAND_STOPPED                                     :{RED}Остановлен
 STR_VEHICLE_COMMAND_STARTED                                     :{GREEN}Запущен
+
+# Cab view
+STR_CAB_VIEW_CAPTION                                            :{WHITE}Кабина: {VEHICLE}
+STR_CAB_VIEW_LOOK_AHEAD                                         :{BLACK}Смотреть вперёд
+STR_CAB_VIEW_LOOK_AHEAD_TOOLTIP                                 :{BLACK}Переключить между взглядом вперёд по ходу движения и транспортом в центре вида
+STR_CAB_VIEW_3D                                                 :{BLACK}3D
+STR_CAB_VIEW_3D_TOOLTIP                                         :{BLACK}Переключить между картой и 3D-видом из кабины поезда, автомобиля, судна или самолёта
+STR_CAB_VIEW_START                                              :{BLACK}Пуск
+STR_CAB_VIEW_STOP                                               :{BLACK}Стоп
+STR_CAB_VIEW_START_STOP_TOOLTIP                                 :{BLACK}Запустить или остановить транспорт
+STR_CAB_VIEW_SPEED                                              :{WHITE}{VELOCITY}
+STR_CAB_VIEW_MAX_SPEED                                          :{SILVER}макс. {VELOCITY}
+STR_CAB_VIEW_NEXT_STATION                                       :{SILVER}Следующая остановка: {WHITE}{STATION}
+STR_CAB_VIEW_AT_STATION                                         :{SILVER}Сейчас на: {WHITE}{STATION}
+STR_CAB_VIEW_NEXT_WAYPOINT                                      :{SILVER}Через: {WHITE}{WAYPOINT}
+STR_CAB_VIEW_NEXT_DEPOT                                         :{SILVER}Направляется в: {WHITE}{DEPOT}
+STR_CAB_VIEW_NO_DESTINATION                                     :{SILVER}Нет пункта назначения
+STR_CAB_VIEW_STATE_RUNNING                                      :{GREEN}В пути
+STR_CAB_VIEW_STATE_STANDING                                     :{ORANGE}Стоит
+STR_CAB_VIEW_LOAD                                               :{SILVER}Загрузка: {WHITE}{NUM}%
+STR_CAB_VIEW_LOAD_NONE                                          :{SILVER}Загрузка: {WHITE}-
+STR_CAB_VIEW_LOOK_AHEAD_3D_TOOLTIP                              :{BLACK}Снова смотреть прямо вперёд. Чтобы осмотреться, удерживайте на 3D-виде кнопку мыши, которой прокручиваете карту
+STR_CAB_VIEW_STEP_OUT                                           :{BLACK}Выйти
+STR_CAB_VIEW_STEP_OUT_TOOLTIP                                   :{BLACK}Выйти из кабины и пройтись пешком в 3D-виде; только пока транспорт стоит
+STR_CAB_VIEW_NO_ROOM_TO_STEP_OUT                                :{WHITE}Здесь негде выйти
+
+# First-person view
+STR_FP_CAPTION_ON_FOOT                                          :{WHITE}Пешком
+STR_FP_CAPTION_PASSENGER                                        :{WHITE}Пассажир: {VEHICLE}
+STR_FP_GET_IN                                                   :{BLACK}Войти
+STR_FP_GET_OFF                                                  :{BLACK}Выйти
+STR_FP_GET_IN_TOOLTIP                                           :{BLACK}Войти в транспорт рядом с вами или выйти из того, в котором вы едете; только пока он стоит. Клавиша: E
+STR_FP_SIT                                                      :{BLACK}Сесть
+STR_FP_STAND_UP                                                 :{BLACK}Встать
+STR_FP_SIT_TOOLTIP                                              :{BLACK}Сесть на ближайшее место у окна или снова встать. Клавиша: пробел
+STR_FP_STATUS_NEAR_TOWN                                         :{SILVER}Рядом с городом {WHITE}{TOWN}
+STR_FP_STATUS_COUNTRYSIDE                                       :{SILVER}За городом
+STR_FP_STATUS_CAR                                               :{SILVER}Вагон {WHITE}{NUM}{SILVER} из {NUM}, {WHITE}{VELOCITY}
+STR_FP_STATUS_SPEED                                             :{WHITE}{VELOCITY}
+STR_FP_MOUSE_RIGHT                                              :правая
+STR_FP_MOUSE_LEFT                                               :левая
+STR_FP_HINT_WALK                                                :{GRAY}Стрелки или W A S D: идти, Shift: бежать, {STRING} кнопка мыши: осмотреться
+STR_FP_HINT_GET_IN                                              :{GRAY}E: войти — {VEHICLE}
+STR_FP_HINT_GET_INTO_CAB                                        :{GRAY}E: в кабину — {VEHICLE}
+STR_FP_HINT_NO_WAY_IN                                           :{GRAY}В этот вагон не войти — {VEHICLE}
+STR_FP_HINT_MOVING                                              :{GRAY}Подождите, пока {VEHICLE} остановится
+STR_FP_HINT_INSIDE                                              :{GRAY}Стрелки или W A S D: идти по вагонам, пробел: сесть, E: выйти, {STRING} кнопка мыши: осмотреться
+STR_FP_HINT_INSIDE_BUS                                          :{GRAY}Стрелки или W A S D: идти, пробел: сесть, E: выйти, {STRING} кнопка мыши: осмотреться
+STR_FP_HINT_SEATED                                              :{GRAY}Пробел: встать, E: выйти, {STRING} кнопка мыши: осмотреться
+STR_FP_HINT_INSIDE_VAN                                          :{GRAY}Стрелки или W A S D: идти, E: выйти, {STRING} кнопка мыши: осмотреться
+STR_FP_MESSAGE_WAIT_UNTIL_STANDING                              :{ORANGE}Подождите, пока транспорт остановится
+STR_FP_MESSAGE_NO_ROOM_TO_GET_OFF                               :{ORANGE}Здесь негде выйти
+STR_FP_MESSAGE_NO_WAY_IN                                        :{ORANGE}В этот вагон не войти
 
 # Vehicle details
 STR_VEHICLE_DETAILS_CAPTION                                     :{WHITE}{VEHICLE} (Детали)

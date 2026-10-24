@@ -362,6 +362,12 @@ enum class WindowClass : uint16_t {
 	VehicleCabView,
 
 	/**
+	 * First-person view, on foot or as a passenger; %Window numbers:
+	 *   - 0 = #FirstPersonWidgets
+	 */
+	FirstPersonView,
+
+	/**
 	 * Station view; %Window numbers:
 	 *   - #StationID = #StationViewWidgets
 	 */

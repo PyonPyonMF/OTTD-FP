@@ -1015,8 +1015,17 @@ void VideoDriver_Win32Base::InputLoop()
 		_dirkeys.Set(DirectionKey::Up, GetAsyncKeyState(VK_UP));
 		_dirkeys.Set(DirectionKey::Right, GetAsyncKeyState(VK_RIGHT));
 		_dirkeys.Set(DirectionKey::Down, GetAsyncKeyState(VK_DOWN));
+
+		/* Scan codes are where the keys are, whatever the layout of the keyboard. */
+		auto held = [](UINT scancode) { return GetAsyncKeyState(MapVirtualKey(scancode, MAPVK_VSC_TO_VK)) < 0; };
+		_walkkeys.Set(WalkKey::Forward, held(0x11));
+		_walkkeys.Set(WalkKey::Left, held(0x1E));
+		_walkkeys.Set(WalkKey::Back, held(0x1F));
+		_walkkeys.Set(WalkKey::Right, held(0x20));
+		_walkkeys.Set(WalkKey::Use, held(0x12));
 	} else {
 		_dirkeys.Reset();
+		_walkkeys.Reset();
 	}
 
 	if (old_ctrl_pressed != _ctrl_pressed) HandleCtrlChanged();

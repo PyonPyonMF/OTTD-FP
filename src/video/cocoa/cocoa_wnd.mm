@@ -895,11 +895,30 @@ void CocoaDialog(std::string_view title, std::string_view message, std::string_v
 }
 
 /**
+ * Keep track of the keys for walking in the first-person view.
+ * @param keycode The key code of the event; key codes are where the keys are, whatever the layout of the keyboard.
+ * @param down Whether the key is pressed or released.
+ */
+static void HandleWalkKey(unsigned short keycode, bool down)
+{
+	switch (keycode) {
+		case QZ_w: _walkkeys.Set(WalkKey::Forward, down); break;
+		case QZ_a: _walkkeys.Set(WalkKey::Left, down); break;
+		case QZ_s: _walkkeys.Set(WalkKey::Back, down); break;
+		case QZ_d: _walkkeys.Set(WalkKey::Right, down); break;
+		case QZ_e: _walkkeys.Set(WalkKey::Use, down); break;
+		default: break;
+	}
+}
+
+/**
  * Handler of keyboard key pressing.
  * @param event Information about occurred event.
  */
 - (void)keyDown:(NSEvent *)event
 {
+	HandleWalkKey(event.keyCode, true);
+
 	/* Quit, hide and minimize */
 	switch (event.keyCode) {
 		case QZ_q:
@@ -933,6 +952,8 @@ void CocoaDialog(std::string_view title, std::string_view message, std::string_v
  */
 - (void)keyUp:(NSEvent *)event
 {
+	HandleWalkKey(event.keyCode, false);
+
 	/* Quit, hide and minimize */
 	switch (event.keyCode) {
 		case QZ_q:

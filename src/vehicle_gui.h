@@ -107,6 +107,7 @@ inline WindowClass GetWindowClassForVehicleType(VehicleType vt)
 /* Unified window procedure */
 void ShowVehicleViewWindow(const Vehicle *v);
 void ShowCabViewWindow(const Vehicle *v);
+void ShowCabViewWindow3D(const Vehicle *v, const Window *replace);
 void DrawCabViewIcon(const Rect &r);
 bool VehicleClicked(const Vehicle *v);
 bool VehicleClicked(VehicleList::const_iterator begin, VehicleList::const_iterator end);

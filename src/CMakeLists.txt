@@ -100,6 +100,8 @@ add_files(
     cab_view_3d.cpp
     cab_view_3d.h
     cab_view_gui.cpp
+    cab_view_ride.cpp
+    cab_view_ride.h
     cachecheck.cpp
     cargo_type.h
     cargoaction.cpp
@@ -195,6 +197,8 @@ add_files(
     fios.cpp
     fios.h
     fios_gui.cpp
+    first_person_gui.cpp
+    first_person_gui.h
     fontcache.cpp
     fontcache.h
     framerate_gui.cpp

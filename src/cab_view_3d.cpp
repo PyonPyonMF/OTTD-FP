@@ -83,8 +83,10 @@ constexpr float AIRCRAFT_UNITS = 0.4f; ///< Size of a sprite pixel of an aircraf
 constexpr float SHIP_UNITS = 0.4f; ///< Size of a sprite pixel of a ship, in world units.
 constexpr float SHIP_MIN_UPRIGHT = 0.4f; ///< How much the sprite of a ship seen from straight ahead or behind is shrunk upwards, see #Renderer::AddShip.
 constexpr float FOV_DEG = 64.0f; ///< Horizontal field of view.
+constexpr float FOV_INSIDE_DEG = 80.0f; ///< Horizontal field of view inside a vehicle, where everything is close.
 constexpr float PITCH_DEG = -6.0f; ///< How much the camera looks down.
 constexpr float NEAR = 0.5f; ///< Near clipping distance.
+constexpr float NEAR_INSIDE = 0.15f; ///< Near clipping distance inside a vehicle, where the walls are close.
 constexpr float DETAIL_DIST = 6.0f * TILE; ///< Distance where the fine pattern on walls and roofs has faded out.
 constexpr int DETAIL_SIZE = 128; ///< Width and height of the patterns of the materials of the ground, in pixels; they repeat.
 constexpr float DETAIL_PERIOD = 4.0f; ///< Distance after which the patterns of the materials of the ground repeat.
@@ -237,6 +239,24 @@ constexpr RGB HEDGE_YELLOW_COLOUR = {236, 206, 72}; ///< Colour of the yellow fl
 constexpr RGB HEDGE_RED_COLOUR = {206, 64, 60}; ///< Colour of the red flowers of flowering hedges.
 constexpr RGB FIELD_FENCE_COLOUR = {150, 116, 76}; ///< Colour of the wooden fences and gates around fields.
 constexpr RGB LOCK_GATE_GAP_COLOUR = {28, 22, 16}; ///< Colour of the seam between the leaves of a gate of a lock.
+constexpr RGB INTERIOR_FLOOR_COLOUR = {92, 84, 76}; ///< Colour of the floor inside vehicles.
+constexpr RGB INTERIOR_WALL_COLOUR = {206, 198, 180}; ///< Colour of the walls inside vehicles.
+constexpr RGB INTERIOR_CEILING_COLOUR = {226, 224, 214}; ///< Colour of the ceiling inside vehicles.
+constexpr RGB INTERIOR_LAMP_COLOUR = {255, 246, 214}; ///< Colour of the lamps along the ceiling inside vehicles.
+constexpr RGB INTERIOR_FRAME_COLOUR = {120, 120, 126}; ///< Colour of the frames of the windows, the doors and the luggage racks inside vehicles.
+constexpr RGB INTERIOR_SHELF_COLOUR = {148, 112, 72}; ///< Colour of the wooden shelves in mail vans.
+constexpr RGB INTERIOR_MAIL_COLOUR = {196, 178, 132}; ///< Colour of the mail bags on the shelves in mail vans.
+
+constexpr float INTERIOR_WALL = 0.12f; ///< Thickness of the walls of the inside of vehicles.
+constexpr float INTERIOR_HEIGHT = 3.6f; ///< Height of the ceiling inside vehicles above their floor, about 2.2 m; from the inside, the box of the vehicle may be lower.
+constexpr float INTERIOR_SILL = 1.3f; ///< Height of the windows of vehicles above their floor.
+constexpr float INTERIOR_LINTEL = 3.0f; ///< Height of the top of the windows of vehicles above their floor.
+constexpr float INTERIOR_SEAT_BACK = 1.7f; ///< Height of the backs of the seats in vehicles above their floor, below the eyes of someone sitting.
+constexpr float INTERIOR_DOOR_HALF_WIDTH = 0.55f; ///< Half the width of the doors to the next vehicle.
+constexpr float INTERIOR_WINDOW_SPACING = 2.4f; ///< Distance between the pillars between the windows of vehicles.
+constexpr float INTERIOR_PILLAR = 0.35f; ///< Width of the pillars between the windows of vehicles.
+constexpr float INTERIOR_SEAT_PITCH = 2.0f; ///< Distance between the rows of seats in vehicles.
+constexpr float INTERIOR_AISLE_HALF_WIDTH = 0.45f; ///< Half the width of the aisle between the seats in vehicles.
 
 /** A vector in world coordinates. */
 struct Vec3 {
@@ -593,8 +613,21 @@ public:
 	 */
 	float GetFrameTime(float scale) const { return this->fixed_ms + this->fill_ms * scale * scale; }
 
+	CabViewWalkSurface GetWalkSurface(float x, float y, float radius);
+
+	/** A train or road vehicle as a box dressed in its sprite, see #GetVehicleBox. */
+	struct VehicleBox {
+		const GroundTexture *tex; ///< The sprite of the vehicle going to the south west.
+		float length; ///< Length along the vehicle.
+		float width; ///< Width across the vehicle.
+		float height; ///< Height of the box in the sprite; the box in the view is #height_scale times that.
+		float height_scale; ///< How much the heights of the sprite are scaled in the view.
+	};
+	std::optional<VehicleBox> GetVehicleBox(const Vehicle *v);
+
 	void Reset()
 	{
+		this->walk_tiles.clear();
 		this->sprites.clear();
 		this->textures.clear();
 		this->box_textures.clear();
@@ -617,6 +650,7 @@ private:
 	VehicleID own = VehicleID::Invalid(); ///< The vehicle the camera rides on.
 	bool frame_valid = false; ///< Whether #frame holds a finished picture.
 	CabViewCamera frame_camera; ///< Camera of the picture in #frame.
+	float near_plane = NEAR; ///< Near clipping distance of the current picture.
 	float fog_start = FOG_START; ///< Distance where the haze starts in the current picture.
 	float fog_end = FOG_END; ///< Distance where everything has melted into the haze in the current picture.
 	uint32_t frame_id = 0; ///< Identification of the picture in #frame, see #DrawCabView3D.
@@ -629,6 +663,15 @@ private:
 	std::map<std::tuple<SpriteID, PaletteID, int, int, int, int, int, bool>, BuildingShape> building_shapes; ///< Shapes of buildings worked out so far, see #GetBuildingShape.
 	std::vector<GroundSpriteToDraw> ground_sprites; ///< Scratch buffer for collecting ground sprites.
 	std::vector<BoxSpriteToDraw> box_sprites; ///< Scratch buffer for collecting sprites standing in boxes.
+
+	/** What someone walking finds on a tile, see #GetWalkSurface. */
+	struct WalkTile {
+		bool blocked = false; ///< Whether nobody can be anywhere on the tile, like on water.
+		std::vector<std::array<float, 4>> walls; ///< Footprints of buildings: x0, y0, x1, y1.
+		std::vector<std::pair<std::array<float, 4>, float>> platforms; ///< Footprints of platforms, and the heights of their tops.
+	};
+	std::unordered_map<uint32_t, WalkTile> walk_tiles; ///< What someone walking finds on the tiles asked for lately.
+	std::chrono::steady_clock::time_point walk_time; ///< When #walk_tiles was last cleared, as the tiles may change.
 	std::vector<int32_t> key; ///< Scratch buffer for texture keys.
 	const GroundTexture masonry = MakeMasonryTexture(); ///< Texture of the walls around foundations.
 	const GroundTexture cascade = MakeCascadeTexture(); ///< Texture of the water falling over the steps of a river going down a slope.
@@ -682,6 +725,8 @@ private:
 	void AddFieldWall(TileIndex tile, Axis axis, float line, const CornerIndexArray<float> &corner_z, bool split_we);
 	bool AddRailFence(TileIndex tile, const BoxSpriteToDraw &box, const CornerIndexArray<float> &corner_z, bool split_we, float dist);
 	void AddVehicles(VehicleID own);
+	void AddInterior(const CabViewInterior &in);
+	const WalkTile &GetWalkTile(TileIndex tile);
 	Direction GetShownDirection(Direction dir) const;
 	void AddShip(const Ship *v);
 	void AddAircraft(const Aircraft *v);
@@ -1677,11 +1722,12 @@ RGB Renderer::Fog(const RGB &colour, float dist) const
  */
 void Renderer::AddTriangle(const std::array<ClipVertex, 3> &tri, const Paint &paint)
 {
-	if (tri[0].c.y >= NEAR && tri[1].c.y >= NEAR && tri[2].c.y >= NEAR) {
+	const float near = this->near_plane;
+	if (tri[0].c.y >= near && tri[1].c.y >= near && tri[2].c.y >= near) {
 		this->SetupTriangle(tri[0], tri[1], tri[2], paint);
 		return;
 	}
-	if (tri[0].c.y < NEAR && tri[1].c.y < NEAR && tri[2].c.y < NEAR) return;
+	if (tri[0].c.y < near && tri[1].c.y < near && tri[2].c.y < near) return;
 
 	/* Cut off the part behind the near plane. */
 	std::array<ClipVertex, 4> poly;
@@ -1689,9 +1735,9 @@ void Renderer::AddTriangle(const std::array<ClipVertex, 3> &tri, const Paint &pa
 	for (int i = 0; i < 3; i++) {
 		const ClipVertex &a = tri[i];
 		const ClipVertex &b = tri[(i + 1) % 3];
-		if (a.c.y >= NEAR) poly[n++] = a;
-		if ((a.c.y >= NEAR) != (b.c.y >= NEAR)) {
-			float t = (NEAR - a.c.y) / (b.c.y - a.c.y);
+		if (a.c.y >= near) poly[n++] = a;
+		if ((a.c.y >= near) != (b.c.y >= near)) {
+			float t = (near - a.c.y) / (b.c.y - a.c.y);
 			ClipVertex &v = poly[n++];
 			v.c = a.c + (b.c - a.c) * t;
 			for (int k = 0; k < ATTRIBUTES; k++) v.a[k] = a.a[k] + (b.a[k] - a.a[k]) * t;
@@ -4191,24 +4237,9 @@ void Renderer::AddVehicles(VehicleID own)
 			continue;
 		}
 
-		/* The sprite of the vehicle going to the south west, along the x axis. */
-		VehicleSpriteSeq seq;
-		v->GetImage(Direction::SW, EngineImageType::OnMap, &seq);
-		if (!seq.IsValid()) continue;
-		PaletteID pal = seq.seq[0].pal != 0 ? seq.seq[0].pal : GetVehiclePalette(v);
-		const GroundTexture &tex = this->GetBoxTexture(seq.seq[0].sprite, pal);
-		const Picture &pic = tex.levels[0];
-		if (pic.alpha.empty()) continue;
-		std::optional<int> top = TopRow(tex);
-		if (!top.has_value()) continue;
-
-		/* The box: its length from the game, its width and height from the sprite, which is 2 (length + width) wide. */
-		uint8_t veh_length = (v->type == VehicleType::Train) ? Train::From(v)->gcache.cached_veh_length : RoadVehicle::From(v)->gcache.cached_veh_length;
-		float length = static_cast<float>(veh_length);
-		float width = std::clamp(pic.width / 2.0f - length, 1.5f, std::max(length, 1.5f));
-		/* Road vehicles are drawn small for their length; widen them as much as they are made taller, but keep them in their lane. */
-		if (v->type == VehicleType::Road) width = std::min(width * ROAD_VEHICLE_HEIGHT, ROAD_VEHICLE_MAX_WIDTH);
-		float height = std::clamp(-*top - (length + width) / 2, 2.0f, 40.0f);
+		std::optional<VehicleBox> box = this->GetVehicleBox(v);
+		if (!box.has_value()) continue;
+		const float length = box->length, width = box->width;
 
 		auto [hx, hy] = HEADINGS[v->direction];
 		float angle = std::atan2(hy, hx);
@@ -4216,18 +4247,301 @@ void Renderer::AddVehicles(VehicleID own)
 		pl.origin = {static_cast<float>(v->x_pos), static_cast<float>(v->y_pos), static_cast<float>(v->z_pos)};
 		pl.cos = std::cos(angle);
 		pl.sin = std::sin(angle);
-		pl.height_scale = v->type == VehicleType::Road ? ROAD_VEHICLE_HEIGHT : BUILDING_HEIGHT;
+		pl.height_scale = box->height_scale;
 
 		/* Leave out the vehicle the camera is on. */
 		Vec3 d = this->cam.pos - pl.origin;
 		float along = d.x * pl.cos + d.y * pl.sin;
 		float across = -d.x * pl.sin + d.y * pl.cos;
-		if (std::abs(along) <= length / 2 + 1 && std::abs(across) <= width / 2 + 1) continue;
+		if (std::abs(along) <= length / 2 + 1 && std::abs(across) <= width / 2 + 1 && std::abs(d.z) <= box->height * box->height_scale + 2) continue;
 
 		/* Road vehicles are often seen from right behind, where cutting out the transparent parts of the picture of
 		 * their ends left holes between their roofs and their backs; their boxes are solid. */
-		this->AddSpriteBox(tex, pl, {-length / 2, -width / 2, 0}, {length / 2, width / 2, height}, false, true, v->type != VehicleType::Road);
+		this->AddSpriteBox(*box->tex, pl, {-length / 2, -width / 2, 0}, {length / 2, width / 2, box->height}, false, true, v->type != VehicleType::Road);
 	}
+}
+
+/**
+ * Get the box a train or road vehicle is drawn as: its length from the game, its width and height from its sprite.
+ * @param v The vehicle (part).
+ * @return The box, or std::nullopt when the vehicle has no sprite to draw.
+ */
+std::optional<Renderer::VehicleBox> Renderer::GetVehicleBox(const Vehicle *v)
+{
+	if (v->type != VehicleType::Train && v->type != VehicleType::Road) return std::nullopt;
+
+	/* The sprite of the vehicle going to the south west, along the x axis. */
+	VehicleSpriteSeq seq;
+	v->GetImage(Direction::SW, EngineImageType::OnMap, &seq);
+	if (!seq.IsValid()) return std::nullopt;
+	PaletteID pal = seq.seq[0].pal != 0 ? seq.seq[0].pal : GetVehiclePalette(v);
+	const GroundTexture &tex = this->GetBoxTexture(seq.seq[0].sprite, pal);
+	const Picture &pic = tex.levels[0];
+	if (pic.alpha.empty()) return std::nullopt;
+	std::optional<int> top = TopRow(tex);
+	if (!top.has_value()) return std::nullopt;
+
+	/* The sprite is 2 (length + width) wide. */
+	uint8_t veh_length = (v->type == VehicleType::Train) ? Train::From(v)->gcache.cached_veh_length : RoadVehicle::From(v)->gcache.cached_veh_length;
+	float length = static_cast<float>(veh_length);
+	float width = std::clamp(pic.width / 2.0f - length, 1.5f, std::max(length, 1.5f));
+	/* Road vehicles are drawn small for their length; widen them as much as they are made taller, but keep them in their lane. */
+	if (v->type == VehicleType::Road) width = std::min(width * ROAD_VEHICLE_HEIGHT, ROAD_VEHICLE_MAX_WIDTH);
+	float height = std::clamp(-*top - (length + width) / 2, 2.0f, 40.0f);
+	return VehicleBox{&tex, length, width, height, v->type == VehicleType::Road ? ROAD_VEHICLE_HEIGHT : BUILDING_HEIGHT};
+}
+
+/**
+ * Add the inside of the vehicle the camera is in: floor, walls with windows, ceiling with lamps, the doors to
+ * the next vehicles, and seats along an aisle or shelves along the walls. It is drawn in the frame of the vehicle,
+ * which moves as smoothly as the camera, so nothing inside shakes.
+ * @param in The inside.
+ */
+void Renderer::AddInterior(const CabViewInterior &in)
+{
+	const float cy = std::cos(in.yaw), sy = std::sin(in.yaw), cp = std::cos(in.pitch), sp = std::sin(in.pitch);
+	const Vec3 fwd = {cy * cp, sy * cp, sp};
+	const Vec3 left = {-sy, cy, 0};
+	const Vec3 up = fwd.Cross(left);
+	const Vec3 origin = {in.x, in.y, in.z};
+	/* A point along the vehicle, across it to the left and up from its track. */
+	auto at = [&](float a, float c, float h) { return origin + fwd * a + left * c + up * h; };
+	auto quad = [&](const std::array<Vec3, 4> &q, const RGB &colour, bool lit = false) { this->AddFlatQuad(q, colour, 1.0f, lit); };
+	/* A box from a0 to a1 along, c0 to c1 across and h0 to h1 up. */
+	auto box = [&](float a0, float a1, float c0, float c1, float h0, float h1, const RGB &colour) {
+		quad({at(a0, c0, h1), at(a1, c0, h1), at(a1, c1, h1), at(a0, c1, h1)}, colour);
+		quad({at(a0, c0, h0), at(a1, c0, h0), at(a1, c0, h1), at(a0, c0, h1)}, colour);
+		quad({at(a0, c1, h0), at(a1, c1, h0), at(a1, c1, h1), at(a0, c1, h1)}, colour);
+		quad({at(a0, c0, h0), at(a0, c1, h0), at(a0, c1, h1), at(a0, c0, h1)}, colour);
+		quad({at(a1, c0, h0), at(a1, c1, h0), at(a1, c1, h1), at(a1, c0, h1)}, colour);
+	};
+
+	const float la = in.length / 2 - INTERIOR_WALL;
+	const float wc = in.width / 2 - INTERIOR_WALL;
+	const float floor = in.floor;
+	const float ceiling = floor + INTERIOR_HEIGHT;
+	const float sill = floor + INTERIOR_SILL;
+	const float lintel = floor + INTERIOR_LINTEL;
+	const bool coach = in.kind == CabViewInteriorKind::Coach;
+
+	quad({at(-la, -wc, floor), at(la, -wc, floor), at(la, wc, floor), at(-la, wc, floor)}, INTERIOR_FLOOR_COLOUR);
+	quad({at(-la, -wc, ceiling), at(la, -wc, ceiling), at(la, wc, ceiling), at(-la, wc, ceiling)}, INTERIOR_CEILING_COLOUR);
+	quad({at(-la, -0.15f, ceiling - 0.02f), at(la, -0.15f, ceiling - 0.02f), at(la, 0.15f, ceiling - 0.02f), at(-la, 0.15f, ceiling - 0.02f)}, INTERIOR_LAMP_COLOUR, true);
+
+	/* The side walls; a coach has windows between the sill and the lintel, a mail van only small ones high up. */
+	const float window_low = coach ? sill : lintel - 0.5f;
+	for (float c : {-wc, wc}) {
+		quad({at(-la, c, floor), at(la, c, floor), at(la, c, window_low), at(-la, c, window_low)}, INTERIOR_WALL_COLOUR);
+		quad({at(-la, c, lintel), at(la, c, lintel), at(la, c, ceiling), at(-la, c, ceiling)}, INTERIOR_WALL_COLOUR);
+		const int windows = std::max(1, static_cast<int>(std::round(2 * la / INTERIOR_WINDOW_SPACING)));
+		const float spacing = 2 * la / windows;
+		for (int i = 0; i <= windows; i++) {
+			const float a = -la + i * spacing;
+			const float a0 = std::max(-la, a - INTERIOR_PILLAR / 2), a1 = std::min(la, a + INTERIOR_PILLAR / 2);
+			quad({at(a0, c, window_low), at(a1, c, window_low), at(a1, c, lintel), at(a0, c, lintel)}, INTERIOR_FRAME_COLOUR);
+		}
+		/* Luggage racks above the windows. */
+		if (coach) {
+			const float inner = c < 0 ? c + 0.6f : c - 0.6f;
+			quad({at(-la, c, lintel + 0.1f), at(la, c, lintel + 0.1f), at(la, inner, lintel + 0.1f), at(-la, inner, lintel + 0.1f)}, INTERIOR_FRAME_COLOUR);
+		}
+	}
+
+	/* The end walls, with a door to the next vehicle when there is a gangway. */
+	const float door_top = std::min(floor + 2.9f, ceiling - 0.2f);
+	for (auto [a, gangway] : {std::pair{la, in.gangway_front}, std::pair{-la, in.gangway_back}}) {
+		if (!gangway && in.windscreen) {
+			/* A window as wide as the vehicle, like the windscreen of a bus. */
+			quad({at(a, -wc, floor), at(a, wc, floor), at(a, wc, sill), at(a, -wc, sill)}, INTERIOR_WALL_COLOUR);
+			quad({at(a, -wc, lintel), at(a, wc, lintel), at(a, wc, ceiling), at(a, -wc, ceiling)}, INTERIOR_WALL_COLOUR);
+			for (float c : {-wc, wc - INTERIOR_PILLAR}) quad({at(a, c, sill), at(a, c + INTERIOR_PILLAR, sill), at(a, c + INTERIOR_PILLAR, lintel), at(a, c, lintel)}, INTERIOR_FRAME_COLOUR);
+			continue;
+		}
+		if (!gangway) {
+			quad({at(a, -wc, floor), at(a, wc, floor), at(a, wc, ceiling), at(a, -wc, ceiling)}, INTERIOR_WALL_COLOUR);
+			continue;
+		}
+		const float d = INTERIOR_DOOR_HALF_WIDTH;
+		quad({at(a, -wc, floor), at(a, -d, floor), at(a, -d, ceiling), at(a, -wc, ceiling)}, INTERIOR_WALL_COLOUR);
+		quad({at(a, d, floor), at(a, wc, floor), at(a, wc, ceiling), at(a, d, ceiling)}, INTERIOR_WALL_COLOUR);
+		quad({at(a, -d, door_top), at(a, d, door_top), at(a, d, ceiling), at(a, -d, ceiling)}, INTERIOR_WALL_COLOUR);
+		/* The frame of the door, and the floor of the gangway to the next vehicle. */
+		const float out = a > 0 ? 1.0f : -1.0f;
+		box(std::min(a, a + out * 0.08f), std::max(a, a + out * 0.08f), -d - 0.08f, -d, floor, door_top, INTERIOR_FRAME_COLOUR);
+		box(std::min(a, a + out * 0.08f), std::max(a, a + out * 0.08f), d, d + 0.08f, floor, door_top, INTERIOR_FRAME_COLOUR);
+		quad({at(a, -d, floor), at(a + out * (INTERIOR_WALL + 0.6f), -d, floor), at(a + out * (INTERIOR_WALL + 0.6f), d, floor), at(a, d, floor)}, INTERIOR_FLOOR_COLOUR * 0.8f);
+	}
+
+	if (coach) {
+		/* Rows of seats on both sides of the aisle, all facing the front, in the colour of the company. */
+		const Colour &cc = _cur_palette.palette[GetColourGradient(in.colour, Shade::Normal).p];
+		const RGB seat = {static_cast<float>(cc.r), static_cast<float>(cc.g), static_cast<float>(cc.b)};
+		const int rows = std::max(1, static_cast<int>((2 * la - 1.2f) / INTERIOR_SEAT_PITCH));
+		const float first = -(rows - 1) * INTERIOR_SEAT_PITCH / 2;
+		for (int i = 0; i < rows; i++) {
+			const float a = first + i * INTERIOR_SEAT_PITCH;
+			for (auto [c0, c1] : {std::pair{INTERIOR_AISLE_HALF_WIDTH, wc - 0.05f}, std::pair{-wc + 0.05f, -INTERIOR_AISLE_HALF_WIDTH}}) {
+				if (c1 <= c0) continue;
+				box(a - 0.45f, a + 0.35f, c0, c1, floor, floor + 0.75f, seat);
+				box(a - 0.6f, a - 0.42f, c0, c1, floor + 0.75f, floor + INTERIOR_SEAT_BACK, seat * 0.8f);
+			}
+		}
+	} else {
+		/* Shelves with bags of mail along both walls. */
+		for (auto [c0, c1] : {std::pair{wc - 0.7f, wc}, std::pair{-wc, -wc + 0.7f}}) {
+			for (float h = floor + 0.4f; h < lintel - 0.5f; h += 0.9f) {
+				box(-la + 0.3f, la - 0.3f, c0, c1, h, h + 0.08f, INTERIOR_SHELF_COLOUR);
+				for (float a = -la + 0.6f; a < la - 0.6f; a += 0.9f) box(a, a + 0.6f, c0 + 0.1f, c1 - 0.1f, h + 0.08f, h + 0.5f, INTERIOR_MAIL_COLOUR);
+			}
+		}
+	}
+}
+
+/**
+ * Get what someone walking finds on a tile: whether it is water, and where the buildings and platforms are,
+ * as the view shows them.
+ * @param tile The tile.
+ * @return What is on the tile.
+ */
+const Renderer::WalkTile &Renderer::GetWalkTile(TileIndex tile)
+{
+	/* Tiles change, as towns grow and companies build; forget them now and then. */
+	auto now = std::chrono::steady_clock::now();
+	if (now - this->walk_time > std::chrono::milliseconds(500) || this->walk_tiles.size() > 1024) {
+		this->walk_tiles.clear();
+		this->walk_time = now;
+	}
+	auto [it, inserted] = this->walk_tiles.try_emplace(tile.base());
+	WalkTile &wt = it->second;
+	if (!inserted) return wt;
+
+	if (IsTileType(tile, TileType::Void) || IsLoweredWater(tile) || IsLockMiddle(tile) || IsBridgeTile(tile) || IsRailDepotTile(tile) || IsRoadDepotTile(tile)) {
+		wt.blocked = true;
+		return wt;
+	}
+	/* Hedges, walls and fences around fields, as AddFieldFences draws them; one walks through the gates. */
+	if (IsTileType(tile, TileType::Clear) && IsClearGround(tile, ClearGround::Fields) && !IsSnowTile(tile)) {
+		const float x0 = TileX(tile) * TILE, y0 = TileY(tile) * TILE;
+		static const std::array<std::tuple<DiagDirection, Axis, float>, 4> sides = {{
+			{DiagDirection::NW, Axis::X, 0.0f}, {DiagDirection::NE, Axis::Y, 0.0f}, {DiagDirection::SW, Axis::Y, TILE}, {DiagDirection::SE, Axis::X, TILE},
+		}};
+		for (const auto &[side, axis, edge] : sides) {
+			const uint fence = GetFence(tile, side);
+			if (fence == 0) continue;
+			const float line = edge == 0 ? FIELD_FENCE_INSET : TILE - FIELD_FENCE_INSET;
+			const float half = fence == 3 ? FENCE_POST_SIZE : (fence > 5 ? FIELD_WALL_HALF_WIDTH : HEDGE_HALF_WIDTH);
+			auto add = [&](float from, float to) {
+				if (axis == Axis::X) {
+					wt.walls.push_back({x0 + from, y0 + line - half, x0 + to, y0 + line + half});
+				} else {
+					wt.walls.push_back({x0 + line - half, y0 + from, x0 + line + half, y0 + to});
+				}
+			};
+			if (fence == 2) {
+				add(0, TILE / 2 - FIELD_GATE_WIDTH / 2);
+				add(TILE / 2 + FIELD_GATE_WIDTH / 2, TILE);
+			} else {
+				add(0, TILE);
+			}
+		}
+		return wt;
+	}
+
+	switch (GetTileType(tile)) {
+		case TileType::House:
+		case TileType::Industry:
+		case TileType::Object:
+		case TileType::Station:
+			break;
+		default:
+			return wt;
+	}
+
+	std::vector<GroundSpriteToDraw> ground;
+	std::vector<BoxSpriteToDraw> boxes;
+	CollectTileGroundSprites(tile, ground, &boxes);
+	const int z = std::get<int>(GetFoundationPixelSlope(tile));
+	const bool station = IsTileType(tile, TileType::Station);
+	for (const BoxSpriteToDraw &box : boxes) {
+		if (box.child || box.bridge) continue;
+		const std::array<float, 4> whole = {static_cast<float>(box.xmin), static_cast<float>(box.ymin), static_cast<float>(box.xmax + 1), static_cast<float>(box.ymax + 1)};
+		if (station) {
+			/* Platforms, the low boxes standing on the ground, see AddTile; roofs are above the head. */
+			if (box.zmin > z + 1) continue;
+			if (box.zmax - box.zmin <= 2) {
+				wt.platforms.emplace_back(whole, box.zmin + (box.zmax + 1 - box.zmin) * PLATFORM_HEIGHT);
+				continue;
+			}
+			if (box.zmax - box.zmin < 10) continue;
+			if (IsDefaultStationBuilding(box.image)) wt.platforms.emplace_back(whole, box.zmin + 2 * PLATFORM_HEIGHT);
+		}
+		const BuildingShape &shape = this->GetBuildingShape(box, station);
+		if (shape.cutout) {
+			/* Woods stand in the way only with their trunks; tall thin things like silos with their box. */
+			if (!shape.plants) wt.walls.push_back(whole);
+			continue;
+		}
+		wt.walls.push_back({box.xmin + shape.x0, box.ymin + shape.y0, box.xmin + shape.x1, box.ymin + shape.y1});
+	}
+	return wt;
+}
+
+/**
+ * Get what someone walking finds at a point: the height of what they stand on, and whether they can be there.
+ * The ground is as the view shows it, and on the platforms of stations one stands on top of them. Water,
+ * the walls of buildings as the view shows them, bridge ramps, depots and the faces of tunnel portals are in the way.
+ * @param x X coordinate of the point.
+ * @param y Y coordinate of the point.
+ * @param radius How far around the point there must be room.
+ * @return What is there.
+ */
+CabViewWalkSurface Renderer::GetWalkSurface(float x, float y, float radius)
+{
+	CabViewWalkSurface surface;
+	if (x < 0 || y < 0 || x >= Map::SizeX() * TILE || y >= Map::SizeY() * TILE) return surface;
+
+	/* The ground as the view shows it. */
+	TileIndex tile = TileVirtXY(static_cast<int>(x), static_cast<int>(y));
+	const float fx = x - TileX(tile) * TILE, fy = y - TileY(tile) * TILE;
+	auto [slope, z] = GetFoundationPixelSlope(tile);
+	slope = RemoveHalftileSlope(slope);
+	float to_portal = TILE;
+	if (IsTunnelTile(tile)) {
+		/* The face of the portal stands at the side of the tile towards the hill. */
+		slope = SLOPE_FLAT;
+		DiagDirection dir = GetTunnelBridgeDirection(tile);
+		to_portal = (dir == DiagDirection::NE) ? fx : (dir == DiagDirection::SE) ? TILE - fy : (dir == DiagDirection::SW) ? TILE - fx : fy;
+	}
+	CornerIndexArray<float> corner_z;
+	for (Corner c : ALL_CORNERS) corner_z[c] = static_cast<float>(z + GetSlopePixelZInCorner(slope, c));
+	const bool split_we = corner_z[Corner::W] == corner_z[Corner::E] || corner_z[Corner::N] != corner_z[Corner::S];
+	surface.height = SurfaceZ(corner_z, split_we, fx, fy);
+	for (const auto &[area, top] : this->GetWalkTile(tile).platforms) {
+		if (x >= area[0] && x < area[2] && y >= area[1] && y < area[3]) surface.height = std::max(surface.height, top);
+	}
+
+	/* What is in the way: the edge of the map, water, buildings, the face of a tunnel portal. */
+	if (x < radius || y < radius || x >= Map::MaxX() * TILE - radius || y >= Map::MaxY() * TILE - radius) return surface;
+	if (to_portal < radius + PORTAL_DEPTH / 2) return surface;
+	const int tx0 = static_cast<int>((x - radius) / TILE), tx1 = static_cast<int>((x + radius) / TILE);
+	const int ty0 = static_cast<int>((y - radius) / TILE), ty1 = static_cast<int>((y + radius) / TILE);
+	for (int ty = ty0; ty <= ty1; ty++) {
+		for (int tx = tx0; tx <= tx1; tx++) {
+			const WalkTile &wt = this->GetWalkTile(TileXY(tx, ty));
+			if (wt.blocked) {
+				/* Only where the circle reaches into the tile. */
+				const float nx = std::clamp(x, tx * TILE, (tx + 1) * TILE), ny = std::clamp(y, ty * TILE, (ty + 1) * TILE);
+				if (std::hypot(nx - x, ny - y) < radius || TileXY(tx, ty) == tile) return surface;
+				continue;
+			}
+			for (const auto &[x0, y0, x1, y1] : wt.walls) {
+				const float nx = std::clamp(x, x0, x1), ny = std::clamp(y, y0, y1);
+				if (std::hypot(nx - x, ny - y) < radius) return surface;
+			}
+		}
+	}
+	surface.walkable = true;
+	return surface;
 }
 
 /**
@@ -4752,9 +5066,12 @@ void Renderer::Draw(const Rect &r, const CabViewCamera &camera, uint32_t frame_i
 	this->cam.right = flat_fwd.Cross(world_up);
 	this->cam.fwd = flat_fwd * std::cos(pitch) + world_up * std::sin(pitch);
 	this->cam.up = world_up * std::cos(pitch) - flat_fwd * std::sin(pitch);
-	this->cam.focal = (this->width / 2.0f) / std::tan(FOV_DEG / 2 * static_cast<float>(M_PI) / 180.0f);
+	const float fov = camera.interior.kind != CabViewInteriorKind::None ? FOV_INSIDE_DEG : FOV_DEG;
+	this->cam.focal = (this->width / 2.0f) / std::tan(fov / 2 * static_cast<float>(M_PI) / 180.0f);
 	this->cam.cx = this->width / 2.0f;
 	this->cam.cy = this->height / 2.0f;
+
+	this->near_plane = camera.interior.kind != CabViewInteriorKind::None ? NEAR_INSIDE : NEAR;
 
 	/* From an aircraft the ground is seen from above, so even what is right below is far from the eye. */
 	float lift = std::clamp(camera.altitude, 0.0f, MAX_FOG_LIFT);
@@ -4789,6 +5106,8 @@ void Renderer::Draw(const Rect &r, const CabViewCamera &camera, uint32_t frame_i
 	std::sort(visible.begin(), visible.end());
 	this->triangles.clear();
 	this->tunnels.clear();
+	/* The inside of the vehicle the camera is in is nearest of all. */
+	if (camera.interior.kind != CabViewInteriorKind::None) this->AddInterior(camera.interior);
 	/* Inside a tunnel its vault is nearest, and hides the hill around it. */
 	if (IsValidTile(camera.tunnel) && IsTunnelTile(camera.tunnel)) this->AddTunnelInside(camera.tunnel, std::get<int>(GetTilePixelSlope(camera.tunnel)));
 	this->own = camera.vehicle;
@@ -4883,6 +5202,30 @@ float GetCabView3DFrameTime(float scale)
 void ResetCabView3D()
 {
 	_renderer.Reset();
+}
+
+/**
+ * Get the box a train or road vehicle is drawn as in the 3D view.
+ * @param v The vehicle (part).
+ * @return The size of the box, or std::nullopt when the vehicle is not drawn as a box.
+ */
+std::optional<CabViewVehicleBox> GetCabView3DVehicleBox(const Vehicle *v)
+{
+	std::optional<Renderer::VehicleBox> box = _renderer.GetVehicleBox(v);
+	if (!box.has_value()) return std::nullopt;
+	return CabViewVehicleBox{box->length, box->width, box->height * box->height_scale};
+}
+
+/**
+ * Get what someone walking in the 3D view finds at a point: the height of what they stand on, and whether they can be there.
+ * @param x X coordinate of the point.
+ * @param y Y coordinate of the point.
+ * @param radius How far around the point there must be room.
+ * @return What is there.
+ */
+CabViewWalkSurface GetCabView3DWalkSurface(float x, float y, float radius)
+{
+	return _renderer.GetWalkSurface(x, y, radius);
 }
 
 /**

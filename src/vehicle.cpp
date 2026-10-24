@@ -62,6 +62,7 @@
 #include "timer/timer_game_calendar.h"
 #include "timer/timer_game_economy.h"
 #include "timer/timer_game_tick.h"
+#include "first_person_gui.h"
 
 #include "table/strings.h"
 
@@ -873,6 +874,8 @@ void Vehicle::PreDestructor()
 	if (this->Previous() == nullptr) {
 		InvalidateWindowData(WindowClass::VehicleDepot, this->tile);
 	}
+
+	FirstPersonVehicleGone(this);
 
 	if (this->IsPrimaryVehicle()) {
 		CloseWindowById(WindowClass::VehicleView, this->index);

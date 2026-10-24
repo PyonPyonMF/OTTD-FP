@@ -4617,6 +4617,38 @@ STR_CAB_VIEW_STATE_RUNNING                                      :{GREEN}Running
 STR_CAB_VIEW_STATE_STANDING                                     :{ORANGE}Standing
 STR_CAB_VIEW_LOAD                                               :{SILVER}Load: {WHITE}{NUM}%
 STR_CAB_VIEW_LOAD_NONE                                          :{SILVER}Load: {WHITE}-
+STR_CAB_VIEW_LOOK_AHEAD_3D_TOOLTIP                              :{BLACK}Look straight ahead again. To look around, hold the mouse button you scroll the map with on the 3D view
+STR_CAB_VIEW_STEP_OUT                                           :{BLACK}Step out
+STR_CAB_VIEW_STEP_OUT_TOOLTIP                                   :{BLACK}Step out of the cab and walk around in the 3D view; only while the vehicle stands still
+STR_CAB_VIEW_NO_ROOM_TO_STEP_OUT                                :{WHITE}There is no room to step out here
+
+# First-person view
+STR_FP_CAPTION_ON_FOOT                                          :{WHITE}On foot
+STR_FP_CAPTION_PASSENGER                                        :{WHITE}Passenger: {VEHICLE}
+STR_FP_GET_IN                                                   :{BLACK}Get in
+STR_FP_GET_OFF                                                  :{BLACK}Get off
+STR_FP_GET_IN_TOOLTIP                                           :{BLACK}Get into the vehicle next to you, or get off the vehicle you ride in; only while it stands still. Key: E
+STR_FP_SIT                                                      :{BLACK}Sit down
+STR_FP_STAND_UP                                                 :{BLACK}Stand up
+STR_FP_SIT_TOOLTIP                                              :{BLACK}Sit down on the nearest seat, by the window, or stand up again. Key: Space
+STR_FP_STATUS_NEAR_TOWN                                         :{SILVER}Near {WHITE}{TOWN}
+STR_FP_STATUS_COUNTRYSIDE                                       :{SILVER}In the countryside
+STR_FP_STATUS_CAR                                               :{SILVER}Car {WHITE}{NUM}{SILVER} of {NUM}, {WHITE}{VELOCITY}
+STR_FP_STATUS_SPEED                                             :{WHITE}{VELOCITY}
+STR_FP_MOUSE_RIGHT                                              :right
+STR_FP_MOUSE_LEFT                                               :left
+STR_FP_HINT_WALK                                                :{GRAY}Arrow keys or W A S D: walk, Shift: run, {STRING} mouse button: look around
+STR_FP_HINT_GET_IN                                              :{GRAY}E: get into {VEHICLE}
+STR_FP_HINT_GET_INTO_CAB                                        :{GRAY}E: get into the cab of {VEHICLE}
+STR_FP_HINT_NO_WAY_IN                                           :{GRAY}There is no way into this wagon of {VEHICLE}
+STR_FP_HINT_MOVING                                              :{GRAY}Wait until {VEHICLE} stands still
+STR_FP_HINT_INSIDE                                              :{GRAY}Arrow keys or W A S D: walk through the cars, Space: sit down, E: get off, {STRING} mouse button: look around
+STR_FP_HINT_INSIDE_BUS                                          :{GRAY}Arrow keys or W A S D: walk, Space: sit down, E: get off, {STRING} mouse button: look around
+STR_FP_HINT_SEATED                                              :{GRAY}Space: stand up, E: get off, {STRING} mouse button: look around
+STR_FP_HINT_INSIDE_VAN                                          :{GRAY}Arrow keys or W A S D: walk, E: get off, {STRING} mouse button: look around
+STR_FP_MESSAGE_WAIT_UNTIL_STANDING                              :{ORANGE}Wait until the vehicle stands still
+STR_FP_MESSAGE_NO_ROOM_TO_GET_OFF                               :{ORANGE}There is no room to get off here
+STR_FP_MESSAGE_NO_WAY_IN                                        :{ORANGE}There is no way into this wagon
 
 # Vehicle details
 STR_VEHICLE_DETAILS_CAPTION                                     :{WHITE}{VEHICLE} (Details)

@@ -21,6 +21,7 @@ enum CabViewWidgets : WidgetID {
 	WID_CV_ZOOM_OUT,   ///< Zoom out.
 	WID_CV_LOOK_AHEAD, ///< Toggle looking ahead in the direction of travel.
 	WID_CV_3D,         ///< Toggle the 3D view.
+	WID_CV_STEP_OUT,   ///< Step out of the cab into the first-person view.
 	WID_CV_START_STOP, ///< Start or stop the vehicle.
 };
 

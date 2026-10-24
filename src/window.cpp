@@ -40,6 +40,7 @@
 #include "script/api/script_event_types.hpp"
 #include "timer/timer.h"
 #include "timer/timer_window.h"
+#include "first_person_gui.h"
 
 #include "widgets/osk_widget.h"
 
@@ -2870,6 +2871,9 @@ static const int8_t scrollamt[16][2] = {
 
 static void HandleKeyScrolling()
 {
+	/* Someone walking in the first-person view moves with the direction keys themselves. */
+	if (FirstPersonCapturesDirectionKeys()) return;
+
 	/*
 	 * Check that any of the dirkeys is pressed and that the focused window
 	 * doesn't have an edit-box as focused widget.

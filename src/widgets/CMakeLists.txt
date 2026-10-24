@@ -16,6 +16,7 @@ add_files(
     engine_widget.h
     error_widget.h
     fios_widget.h
+    first_person_widget.h
     framerate_widget.h
     game_widget.h
     genworld_widget.h

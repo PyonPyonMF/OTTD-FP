@@ -672,6 +672,13 @@ void VideoDriver_SDL_Base::InputLoop()
 	_dirkeys.Set(DirectionKey::Right, keys[SDL_SCANCODE_RIGHT]);
 	_dirkeys.Set(DirectionKey::Down, keys[SDL_SCANCODE_DOWN]);
 
+	/* Scancodes are where the keys are, whatever the layout of the keyboard. */
+	_walkkeys.Set(WalkKey::Forward, keys[SDL_SCANCODE_W]);
+	_walkkeys.Set(WalkKey::Left, keys[SDL_SCANCODE_A]);
+	_walkkeys.Set(WalkKey::Back, keys[SDL_SCANCODE_S]);
+	_walkkeys.Set(WalkKey::Right, keys[SDL_SCANCODE_D]);
+	_walkkeys.Set(WalkKey::Use, keys[SDL_SCANCODE_E]);
+
 	if (old_ctrl_pressed != _ctrl_pressed) HandleCtrlChanged();
 }
 

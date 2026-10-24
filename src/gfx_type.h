@@ -439,4 +439,14 @@ enum class DirectionKey {
 };
 using DirectionKeys = EnumBitSet<DirectionKey, uint8_t>; ///< Bitset of the direction keys.
 
+/** The keys for walking in the first-person view, by where they are on the keyboard: W, A, S, D and E on a QWERTY keyboard. */
+enum class WalkKey : uint8_t {
+	Forward, ///< W
+	Left, ///< A
+	Back, ///< S
+	Right, ///< D
+	Use, ///< E: get into or off a vehicle.
+};
+using WalkKeys = EnumBitSet<WalkKey, uint8_t>; ///< Bitset of the keys for walking.
+
 #endif /* GFX_TYPE_H */
