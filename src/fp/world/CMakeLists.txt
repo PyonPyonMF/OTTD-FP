@@ -1,4 +1,6 @@
 add_files(
+    fp_capture_check.cpp
+    fp_capture_check.h
     fp_terrain_mesher.cpp
     fp_terrain_mesher.h
     fp_tile_capture.cpp

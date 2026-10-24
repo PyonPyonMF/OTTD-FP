@@ -37,7 +37,7 @@ static constexpr float LOOK_SENSITIVITY = 0.0035f;
  * Point on the map at the centre of the main viewport.
  * @return The point, in world units.
  */
-static Point MainViewportCentre()
+Point MainViewportCentre()
 {
 	const Window *w = FindWindowById(WindowClass::MainWindow, 0);
 	if (w != nullptr && w->viewport != nullptr) {
