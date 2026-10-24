@@ -1,11 +1,18 @@
 name: Cab view - MacOS app
 
 # Builds a ready to run OpenTTD.app (arm64, with OpenGFX inside) for trying
-# out the cab view on a Mac without a build environment. It is not signed by
-# a developer certificate, only ad-hoc.
+# out the cab view and the first-person view on a Mac without a build
+# environment. It is not signed by a developer certificate, only ad-hoc.
+# It runs for pull requests that change the 3D view, and by hand.
 
 on:
   pull_request:
+    paths:
+    - '.github/workflows/cab-view-macos-app.yml'
+    - 'src/cab_view_*'
+    - 'src/first_person_*'
+    - 'src/viewport.cpp'
+    - 'src/video/cocoa/**'
   workflow_dispatch:
 
 concurrency:

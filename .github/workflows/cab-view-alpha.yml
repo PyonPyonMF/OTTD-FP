@@ -1,12 +1,12 @@
 name: Cab view - Alpha release
 
-# Builds the cab view alpha for players: MacOS (universal, Apple Silicon and
-# Intel), Windows (x64) and Linux (generic x64). Every package already has
-# OpenGFX, OpenSFX and OpenMSX inside, so it runs without downloading
-# anything else.
+# Builds the first-person alpha (cab view, on foot, as a passenger) for
+# players: MacOS (universal, Apple Silicon and Intel), Windows (x64) and Linux
+# (generic x64). Every package already has OpenGFX, OpenSFX and OpenMSX
+# inside, so it runs without downloading anything else.
 #
-# A release is made by changing cab_view_dev/alpha/VERSION on the cab-view
-# branch (normally by merging a pull request). That builds everything and
+# A release is made by changing cab_view_dev/alpha/VERSION on master
+# (normally by merging a pull request). That builds everything and
 # puts it on a DRAFT release for that version. Nothing is published: the draft
 # is only visible to the owner of the repository until he publishes it by
 # hand, and only then GitHub creates the tag, on the commit that was built.
@@ -17,7 +17,7 @@ name: Cab view - Alpha release
 on:
   push:
     branches:
-    - cab-view
+    - master
     paths:
     - 'cab_view_dev/alpha/VERSION'
   pull_request:
@@ -54,7 +54,7 @@ jobs:
       id: version
       run: |
         VERSION=$(tr -d ' \t\r\n' < cab_view_dev/alpha/VERSION)
-        echo "${VERSION}" | grep -Eq '^[0-9.]+-cabview-alpha[0-9]+$' || { echo "Unexpected version: ${VERSION}"; exit 1; }
+        echo "${VERSION}" | grep -Eq '^[0-9.]+-fp-alpha[0-9]+$' || { echo "Unexpected version: ${VERSION}"; exit 1; }
         if [ "${{ github.event_name }}" != "push" ]; then
           VERSION="${VERSION}-test"
         fi
@@ -460,7 +460,7 @@ jobs:
         done
 
     - name: Create draft release
-      # Only for cab-view itself; pull requests only check the build.
+      # Only for master itself; pull requests only check the build.
       if: github.event_name == 'push'
       env:
         GH_TOKEN: ${{ github.token }}
@@ -477,5 +477,5 @@ jobs:
           --target "${GITHUB_SHA}" \
           --draft \
           --prerelease \
-          --title "OpenTTD cab view ${VERSION#*-cabview-}: first person view (${VERSION})" \
+          --title "OpenTTD first person ${VERSION#*-fp-}: cab view, on foot, as a passenger (${VERSION})" \
           --notes-file release_notes.md
