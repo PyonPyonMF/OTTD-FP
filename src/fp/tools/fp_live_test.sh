@@ -15,6 +15,8 @@
 # Needs: Xvfb, xdotool, ImageMagick (import) and OpenGFX
 # (Debian/Ubuntu: apt install xvfb xdotool imagemagick openttd-opengfx).
 # OPENGFX_DIR overrides where OpenGFX is looked for.
+# FP_NEWGRF=<file.grf> starts a new game with that NewGRF instead of the
+# title game, e.g. the 32bpp test NewGRF built by fp_test_grf.py.
 
 set -u
 
@@ -28,12 +30,14 @@ OUT=$(realpath -m "$2")
 shift 2
 OPENGFX_DIR=${OPENGFX_DIR:-/usr/share/games/openttd/baseset/opengfx}
 DISPLAY_NUMBER=${DISPLAY_NUMBER:-97}
+FP_NEWGRF=${FP_NEWGRF:-}
 
 for tool in Xvfb xdotool import; do
 	command -v $tool >/dev/null || { echo "Missing tool: $tool" >&2; exit 2; }
 done
 [ -x "$BINARY" ] || { echo "Not an executable: $BINARY" >&2; exit 2; }
 [ -d "$OPENGFX_DIR" ] || { echo "OpenGFX not found in $OPENGFX_DIR" >&2; exit 2; }
+[ -z "$FP_NEWGRF" ] || [ -f "$FP_NEWGRF" ] || { echo "NewGRF not found: $FP_NEWGRF" >&2; exit 2; }
 
 mkdir -p "$OUT"
 rm -f "$OUT"/*.png "$OUT"/console.log "$OUT"/openttd.log
@@ -42,6 +46,14 @@ rm -f "$OUT"/*.png "$OUT"/console.log "$OUT"/openttd.log
 TEST_HOME=$(mktemp -d)
 mkdir -p "$TEST_HOME/.local/share/openttd/baseset"
 ln -s "$OPENGFX_DIR" "$TEST_HOME/.local/share/openttd/baseset/opengfx"
+
+GAME_ARGS=()
+if [ -n "$FP_NEWGRF" ]; then
+	mkdir -p "$TEST_HOME/.local/share/openttd/newgrf" "$TEST_HOME/.config/openttd"
+	cp "$FP_NEWGRF" "$TEST_HOME/.local/share/openttd/newgrf/"
+	printf '[newgrf]\n%s =\n' "$(basename "$FP_NEWGRF")" > "$TEST_HOME/.config/openttd/openttd.cfg"
+	GAME_ARGS=(-g)
+fi
 
 XVFB_PID=""
 OTTD_PID=""
@@ -58,7 +70,7 @@ export DISPLAY=":$DISPLAY_NUMBER"
 sleep 2
 
 # OpenTTD finds its language files and base sprites next to the binary.
-(cd "$(dirname "$BINARY")" && HOME="$TEST_HOME" exec "$BINARY" -v sdl-opengl -r 1280x800 -m null -s null -d fp=5) > "$OUT/openttd.log" 2>&1 &
+(cd "$(dirname "$BINARY")" && HOME="$TEST_HOME" exec "$BINARY" -v sdl-opengl -r 1280x800 -m null -s null -d fp=5 "${GAME_ARGS[@]}") > "$OUT/openttd.log" 2>&1 &
 OTTD_PID=$!
 
 # Wait for the window, then a bit for the title game.
