@@ -3556,6 +3556,13 @@ STR_FRAMETIME_CAPTION_ALLSCRIPTS                                :Общее вр
 STR_FRAMETIME_CAPTION_GAMESCRIPT                                :Время выполнения игрового скрипта
 STR_FRAMETIME_CAPTION_AI                                        :ИИ {NUM} {STRING}
 
+# First-person view window (OTTD-FP)
+STR_FP_VIEW_CAPTION                                             :{WHITE}Вид от первого лица
+STR_FP_VIEW_STATUS                                              :{BLACK}Клетка {NUM}×{NUM} · {NUM} м над землёй · чанков: {NUM} · транспорта: {NUM} · {DECIMAL} мс
+STR_FP_VIEW_STATUS_TOOLTIP                                      :{BLACK}Стрелки: движение · Правая кнопка мыши (удерживать): осмотреться · Колесо мыши: вверх и вниз · Shift: быстрее
+STR_FP_VIEW_NO_RENDERER                                         :{WHITE}Для 3D-вида нужен видеодрайвер OpenGL (например, запуск с -v sdl-opengl) и OpenGL 3.3 или новее
+STR_FP_VIEW_RENDERER_FAILED                                     :{WHITE}Не удалось запустить 3D-вид: {RAW_STRING}
+
 
 # Save/load game/scenario
 STR_SAVELOAD_SAVE_CAPTION                                       :{WHITE}Сохранить игру

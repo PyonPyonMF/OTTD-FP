@@ -36,6 +36,7 @@
 #include "../spritecache.h"
 #include "../zoom_func.h"
 #include "../core/string_consumer.hpp"
+#include "../fp/fp_hooks.h"
 
 #include "../table/opengl_shader.h"
 #include "../table/sprites.h"
@@ -519,6 +520,8 @@ OpenGLBackend::OpenGLBackend() : cursor_cache(MAX_CACHED_CURSORS)
  */
 OpenGLBackend::~OpenGLBackend()
 {
+	fp::OnGLContextDestroy(); /* FP hook */
+
 	if (_glDeleteProgram != nullptr) {
 		_glDeleteProgram(this->remap_program);
 		_glDeleteProgram(this->vid_program);
@@ -1090,6 +1093,8 @@ void OpenGLBackend::Paint()
 	_glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 	_glEnable(GL_BLEND);
+
+	fp::OnGLPaint(); /* FP hook */
 }
 
 /**

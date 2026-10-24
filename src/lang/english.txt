@@ -3381,6 +3381,13 @@ STR_FRAMETIME_CAPTION_ALLSCRIPTS                                :GS/AI scripts t
 STR_FRAMETIME_CAPTION_GAMESCRIPT                                :Game script
 STR_FRAMETIME_CAPTION_AI                                        :AI {NUM} {RAW_STRING}
 
+# First-person view window (OTTD-FP)
+STR_FP_VIEW_CAPTION                                             :{WHITE}First-person view
+STR_FP_VIEW_STATUS                                              :{BLACK}Tile {NUM}×{NUM} · {NUM} m above ground · chunks: {NUM} · vehicles: {NUM} · {DECIMAL} ms
+STR_FP_VIEW_STATUS_TOOLTIP                                      :{BLACK}Arrow keys: move · Hold right mouse button: look around · Mouse wheel: up and down · Shift: faster
+STR_FP_VIEW_NO_RENDERER                                         :{WHITE}The 3D view needs an OpenGL video driver (e.g. start with -v sdl-opengl) and OpenGL 3.3 or newer
+STR_FP_VIEW_RENDERER_FAILED                                     :{WHITE}The 3D view could not start: {RAW_STRING}
+
 
 # Save/load game/scenario
 STR_SAVELOAD_SAVE_CAPTION                                       :{WHITE}Save Game
