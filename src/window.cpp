@@ -40,7 +40,6 @@
 #include "script/api/script_event_types.hpp"
 #include "timer/timer.h"
 #include "timer/timer_window.h"
-#include "fp/fp_hooks.h"
 
 #include "widgets/osk_widget.h"
 
@@ -2871,9 +2870,6 @@ static const int8_t scrollamt[16][2] = {
 
 static void HandleKeyScrolling()
 {
-	/* The first-person view moves with the direction keys itself. */
-	if (fp::CapturesDirectionKeys()) return; /* FP hook */
-
 	/*
 	 * Check that any of the dirkeys is pressed and that the focused window
 	 * doesn't have an edit-box as focused widget.

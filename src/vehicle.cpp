@@ -62,7 +62,6 @@
 #include "timer/timer_game_calendar.h"
 #include "timer/timer_game_economy.h"
 #include "timer/timer_game_tick.h"
-#include "fp/fp_hooks.h"
 
 #include "table/strings.h"
 
@@ -829,8 +828,6 @@ void Vehicle::HandlePathfindingResult(bool path_found)
 void Vehicle::PreDestructor()
 {
 	if (CleaningPool()) return;
-
-	fp::OnVehicleDestroyed(this->index); /* FP hook */
 
 	if (Station::IsValidID(this->last_station_visited)) {
 		Station *st = Station::Get(this->last_station_visited);

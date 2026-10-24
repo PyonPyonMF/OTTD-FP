@@ -74,7 +74,6 @@
 #include "social_integration.h"
 #include "core/string_consumer.hpp"
 #include "window_func.h"
-#include "fp/fp_hooks.h"
 
 #include "linkgraph/linkgraphschedule.h"
 
@@ -1268,8 +1267,6 @@ void StateGameLoop()
 		CallWindowGameTickEvent();
 		NewsLoop();
 	}
-
-	fp::OnTickEnd(); /* FP hook */
 
 	assert(IsLocalCompany());
 }

@@ -95,7 +95,6 @@
 #include <forward_list>
 #include <stack>
 
-#include "fp/fp_hooks.h"
 #include "widgets/vehicle_widget.h"
 
 #include "table/strings.h"
@@ -2131,8 +2130,6 @@ void ConstrainAllViewportsZoom()
  */
 void MarkTileDirtyByTile(TileIndex tile, int bridge_level_offset, int tile_height_override)
 {
-	fp::OnTileDirty(tile); /* FP hook */
-
 	Point pt = RemapCoords(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE, tile_height_override * TILE_HEIGHT);
 	MarkAllViewportsDirty(
 			pt.x - MAX_TILE_EXTENT_LEFT,

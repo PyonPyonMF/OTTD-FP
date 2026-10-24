@@ -46,7 +46,6 @@
 #include "3rdparty/fmt/chrono.h"
 #include "company_cmd.h"
 #include "misc_cmd.h"
-#include "fp/fp_hooks.h"
 
 #if defined(WITH_ZLIB)
 #include "network/network_content.h"
@@ -3101,6 +3100,4 @@ void IConsoleStdLibRegister()
 	IConsole::CmdRegister("newgrf_profile",          ConNewGRFProfile,    ConHookNewGRFDeveloperTool);
 
 	IConsole::CmdRegister("dump_info",               ConDumpInfo);
-
-	fp::RegisterConsoleCommands(); /* FP hook */
 }

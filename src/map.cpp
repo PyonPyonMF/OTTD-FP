@@ -12,7 +12,6 @@
 #include "water_map.h"
 #include "error_func.h"
 #include "pathfinder/water_regions.h"
-#include "fp/fp_hooks.h"
 
 #include "safeguards.h"
 
@@ -58,8 +57,6 @@
 	Tile::extended_tiles = std::make_unique<Tile::TileExtended[]>(Map::size);
 
 	AllocateWaterRegions();
-
-	fp::OnMapAllocated(); /* FP hook */
 }
 
 /* static */ void Map::CountLandTiles()
