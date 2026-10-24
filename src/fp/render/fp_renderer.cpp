@@ -174,7 +174,8 @@ bool Renderer::Init()
 	this->sky_program = LinkProgram(SKY_VERTEX_SHADER, SKY_FRAGMENT_SHADER, error);
 	if (this->sky_program != 0) this->terrain_program = LinkProgram(TERRAIN_VERTEX_SHADER, LIT_FRAGMENT_SHADER, error);
 	if (this->terrain_program != 0) this->box_program = LinkProgram(BOX_VERTEX_SHADER, LIT_FRAGMENT_SHADER, error);
-	if (this->box_program == 0) {
+	if (this->box_program != 0) this->billboard_program = LinkProgram(BILLBOARD_VERTEX_SHADER, BILLBOARD_FRAGMENT_SHADER, error);
+	if (this->billboard_program == 0) {
 		this->info = error;
 		this->Shutdown(false);
 		return false;
@@ -206,6 +207,11 @@ bool Renderer::Init()
 	this->terrain_uniforms = lit_uniforms(this->terrain_program);
 	this->box_uniforms = lit_uniforms(this->box_program);
 
+	this->billboard_uniforms.view_proj = _fpgl.glGetUniformLocation(this->billboard_program, "u_view_proj");
+	this->billboard_uniforms.atlas = _fpgl.glGetUniformLocation(this->billboard_program, "u_atlas");
+	this->billboard_uniforms.fog_colour = _fpgl.glGetUniformLocation(this->billboard_program, "u_fog_colour");
+	this->billboard_uniforms.fog_density = _fpgl.glGetUniformLocation(this->billboard_program, "u_fog_density");
+
 	/* The sky needs a vertex array object to draw, but no attributes. */
 	_fpgl.glGenVertexArrays(1, &this->empty_vertex_array);
 
@@ -235,6 +241,15 @@ bool Renderer::Init()
 	_fpgl.glVertexAttribPointer(3, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(BoxInstance), reinterpret_cast<void *>(offsetof(BoxInstance, r)));
 	_fpgl.glVertexAttribDivisor(3, 1);
 
+	/* Billboards: four vertices from gl_VertexID, the rest per instance; the pointers are set per atlas page when drawing. */
+	_fpgl.glGenVertexArrays(1, &this->billboard_vertex_array);
+	_fpgl.glBindVertexArray(this->billboard_vertex_array);
+	_fpgl.glGenBuffers(1, &this->billboard_instance_buffer);
+	for (GLuint attribute = 0; attribute < 3; attribute++) {
+		_fpgl.glEnableVertexAttribArray(attribute);
+		_fpgl.glVertexAttribDivisor(attribute, 1);
+	}
+
 	this->reversed_z = _fpgl.has_clip_control;
 
 	const char *renderer = reinterpret_cast<const char *>(_fpgl.glGetString(GL_RENDERER));
@@ -253,7 +268,7 @@ bool Renderer::Init()
  */
 void Renderer::Shutdown(bool context_lost)
 {
-	bool had_chunks = !this->chunks.empty();
+	bool had_chunks = !this->chunks.empty() || this->atlas.GetPageCount() > 0;
 
 	if (_fpgl.glDeleteProgram != nullptr) {
 		for (auto &[index, chunk] : this->chunks) this->DeleteChunk(chunk);
@@ -261,6 +276,9 @@ void Renderer::Shutdown(bool context_lost)
 		_fpgl.glDeleteProgram(this->sky_program);
 		_fpgl.glDeleteProgram(this->terrain_program);
 		_fpgl.glDeleteProgram(this->box_program);
+		_fpgl.glDeleteProgram(this->billboard_program);
+		_fpgl.glDeleteVertexArrays(1, &this->billboard_vertex_array);
+		_fpgl.glDeleteBuffers(1, &this->billboard_instance_buffer);
 		_fpgl.glDeleteVertexArrays(1, &this->empty_vertex_array);
 		_fpgl.glDeleteVertexArrays(1, &this->box_vertex_array);
 		_fpgl.glDeleteBuffers(1, &this->box_vertex_buffer);
@@ -272,7 +290,9 @@ void Renderer::Shutdown(bool context_lost)
 	}
 
 	this->chunks.clear();
-	this->sky_program = this->terrain_program = this->box_program = 0;
+	this->atlas.Release();
+	this->sky_program = this->terrain_program = this->box_program = this->billboard_program = 0;
+	this->billboard_vertex_array = this->billboard_instance_buffer = 0;
 	this->empty_vertex_array = this->box_vertex_array = 0;
 	this->box_vertex_buffer = this->box_index_buffer = this->box_instance_buffer = 0;
 	this->framebuffer = this->colour_buffer = this->depth_buffer = 0;
@@ -586,7 +606,70 @@ void Renderer::DrawScene(int width, int height)
 		_fpgl.glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLsizei>(BOX_INDICES.size()), GL_UNSIGNED_SHORT, nullptr, static_cast<GLsizei>(this->boxes.size()));
 	}
 
+	this->DrawBillboards(camera.position, view_proj);
+
 	if (this->reversed_z) _fpgl.glClipControl(GL_LOWER_LEFT, GL_NEGATIVE_ONE_TO_ONE);
+}
+
+/**
+ * Draw the billboards of the frame, one draw call per atlas page.
+ * @param camera Position of the camera, in metres.
+ * @param view_proj View and projection of the frame.
+ */
+void Renderer::DrawBillboards(const Vec3d &camera, const Mat4f &view_proj)
+{
+	this->billboards.clear();
+	for (const SpriteBillboard &billboard : this->frame.billboards) {
+		const AtlasRegion &region = billboard.region;
+		if (this->atlas.GetTexture(region.page) == 0) continue;
+
+		/* Later layers move a little towards the camera, so they cover the earlier ones like in the 2D view. */
+		Vec3d relative = billboard.position - camera;
+		double distance = std::hypot(relative.x, relative.y);
+		if (distance > this->frame.view_distance) continue;
+		if (distance > 0 && billboard.layer > 0) {
+			double bias = std::min(0.02 * billboard.layer, distance / 2) / distance;
+			relative.x -= relative.x * bias;
+			relative.y -= relative.y * bias;
+		}
+
+		const float l = static_cast<float>(billboard.pixel_length);
+		BillboardInstance instance;
+		instance.anchor = {static_cast<float>(relative.x), static_cast<float>(relative.y), static_cast<float>(relative.z)};
+		instance.rect = {region.x_offs * l, (region.x_offs + region.width) * l, -(region.y_offs + region.height) * l, -region.y_offs * l};
+		instance.uv = region.GetUV();
+		this->billboards.emplace_back(region.page, instance);
+	}
+	if (this->billboards.empty()) return;
+
+	std::stable_sort(this->billboards.begin(), this->billboards.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+	this->billboard_instances.clear();
+	for (const auto &[page, instance] : this->billboards) this->billboard_instances.push_back(instance);
+
+	_fpgl.glDisable(GL_CULL_FACE);
+	_fpgl.glUseProgram(this->billboard_program);
+	_fpgl.glUniformMatrix4fv(this->billboard_uniforms.view_proj, 1, GL_FALSE, view_proj.m.data());
+	_fpgl.glUniform1i(this->billboard_uniforms.atlas, 0);
+	_fpgl.glUniform3f(this->billboard_uniforms.fog_colour, SKY_HORIZON.x, SKY_HORIZON.y, SKY_HORIZON.z);
+	_fpgl.glUniform1f(this->billboard_uniforms.fog_density, 1.35f / static_cast<float>(this->frame.view_distance));
+	_fpgl.glActiveTexture(GL_TEXTURE0);
+	_fpgl.glBindVertexArray(this->billboard_vertex_array);
+	_fpgl.glBindBuffer(GL_ARRAY_BUFFER, this->billboard_instance_buffer);
+	_fpgl.glBufferData(GL_ARRAY_BUFFER, this->billboard_instances.size() * sizeof(BillboardInstance), this->billboard_instances.data(), GL_STREAM_DRAW);
+
+	for (size_t begin = 0; begin < this->billboards.size();) {
+		uint page = this->billboards[begin].first;
+		size_t end = begin;
+		while (end < this->billboards.size() && this->billboards[end].first == page) end++;
+
+		const size_t base = begin * sizeof(BillboardInstance);
+		_fpgl.glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(BillboardInstance), reinterpret_cast<void *>(base + offsetof(BillboardInstance, anchor)));
+		_fpgl.glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(BillboardInstance), reinterpret_cast<void *>(base + offsetof(BillboardInstance, rect)));
+		_fpgl.glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(BillboardInstance), reinterpret_cast<void *>(base + offsetof(BillboardInstance, uv)));
+		_fpgl.glBindTexture(GL_TEXTURE_2D, this->atlas.GetTexture(page));
+		_fpgl.glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, static_cast<GLsizei>(end - begin));
+		begin = end;
+	}
 }
 
 /**
@@ -627,6 +710,7 @@ void Renderer::Paint()
 		if (this->initialised) this->Shutdown(false);
 		this->failed = false;
 		this->update.ops.clear();
+		this->update.atlas = {};
 		if (fresh) handoff.SetRendererStatus({});
 		return;
 	}
@@ -636,6 +720,7 @@ void Renderer::Paint()
 			if (!this->failed) Debug(Facility::Fp, Severity::Error, "First-person renderer unavailable: {}", this->info);
 			this->failed = true;
 			this->update.ops.clear();
+			this->update.atlas = {};
 			RendererStatus status;
 			status.failed = true;
 			status.info = this->info;
@@ -647,7 +732,10 @@ void Renderer::Paint()
 	auto start = std::chrono::steady_clock::now();
 	GLStateGuard guard;
 
-	if (fresh) this->ApplyChunkOps(this->update.reset_chunks, this->update.ops);
+	if (fresh) {
+		this->ApplyChunkOps(this->update.reset_chunks, this->update.ops);
+		this->atlas.Apply(this->update.atlas);
+	}
 
 	int width = this->frame.view_rect.Width();
 	int height = this->frame.view_rect.Height();
@@ -662,6 +750,8 @@ void Renderer::Paint()
 	status.info = this->info;
 	status.chunks = static_cast<uint>(this->chunks.size());
 	status.vehicles = static_cast<uint>(this->boxes.size());
+	status.atlas_pages = this->atlas.GetPageCount();
+	status.billboards = static_cast<uint>(this->billboards.size());
 	status.frame_ms = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count();
 	handoff.SetRendererStatus(status);
 }

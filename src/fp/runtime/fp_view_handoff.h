@@ -15,9 +15,18 @@
 
 #include "../../core/geometry_type.hpp"
 #include "../roles/fp_role.h"
+#include "../sprites/fp_sprite_atlas.h"
 #include "../world/fp_world_mirror.h"
 
 namespace fp {
+
+/** A sprite standing upright in the world, turned towards the camera. */
+struct SpriteBillboard {
+	Vec3d position{}; ///< Anchor of the sprite, in metres; the anchor pixel of the image lies there.
+	AtlasRegion region{}; ///< The image.
+	double pixel_length = 0; ///< Length of a pixel of the image, in metres.
+	uint8_t layer = 0; ///< Order among billboards at the same anchor; higher layers are drawn in front.
+};
 
 /** Everything the renderer needs to draw the view. */
 struct ViewFrame {
@@ -28,6 +37,7 @@ struct ViewFrame {
 	double view_distance = 0; ///< Distance up to which the world is built, in metres.
 	Rect view_rect{}; ///< Screen rectangle of the 3D view.
 	std::vector<Rect> visible; ///< Parts of #view_rect not covered by other windows.
+	std::vector<SpriteBillboard> billboards; ///< Sprites to show as billboards, e.g. from 'fp sprite_show'.
 };
 
 /** Everything published since the renderer last took it. */
@@ -35,6 +45,7 @@ struct ViewUpdate {
 	ViewFrame frame{}; ///< The latest view state.
 	bool reset_chunks = false; ///< Whether the renderer must drop all chunks before applying #ops.
 	std::vector<ChunkOp> ops; ///< Chunk changes, to apply in order.
+	AtlasChanges atlas; ///< Changes of the sprite atlas, to apply before drawing.
 };
 
 /** What the renderer reports back. */
@@ -45,6 +56,8 @@ struct RendererStatus {
 	uint chunks = 0; ///< Chunks on the GPU.
 	uint vehicles = 0; ///< Vehicles drawn in the last frame.
 	float frame_ms = 0; ///< Time spent rendering the last frame, in milliseconds.
+	uint atlas_pages = 0; ///< Sprite atlas pages on the GPU.
+	uint billboards = 0; ///< Billboards drawn in the last frame.
 };
 
 /**
@@ -58,6 +71,7 @@ struct RendererStatus {
 class ViewHandoff {
 public:
 	void Publish(const ViewFrame &frame, std::vector<ChunkOp> &&ops, bool reset_chunks);
+	void PublishAtlas(AtlasChanges &&changes);
 	void Deactivate();
 	bool Take(ViewUpdate &update);
 
@@ -71,6 +85,7 @@ private:
 	ViewFrame frame{}; ///< Latest view state.
 	std::vector<ChunkOp> ops; ///< Chunk changes not yet taken.
 	bool reset_chunks = false; ///< Whether the renderer must drop all chunks before applying #ops.
+	AtlasChanges atlas{}; ///< Atlas changes not yet taken.
 	bool fresh = false; ///< Whether anything was published since the last take.
 	bool context_lost = false; ///< Whether the renderer lost its chunks, so all must be sent again.
 	RendererStatus status{}; ///< Latest status of the renderer.

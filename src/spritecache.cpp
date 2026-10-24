@@ -18,6 +18,7 @@
 #include "video/video_driver.hpp"
 #include "spritecache.h"
 #include "spritecache_internal.h"
+#include "fp/fp_hooks.h"
 
 #include "table/sprites.h"
 #include "table/palette_convert.h"
@@ -899,6 +900,7 @@ void GfxInitSpriteMem()
 
 	_sprite_files.clear();
 	_spritecache_bytes_used = 0;
+	fp::OnSpritesInvalidated(); /* FP hook */
 }
 
 /**
@@ -913,6 +915,7 @@ void GfxClearSpriteCache()
 	}
 
 	VideoDriver::GetInstance()->ClearSystemSprites();
+	fp::OnSpritesInvalidated(); /* FP hook */
 }
 
 /**

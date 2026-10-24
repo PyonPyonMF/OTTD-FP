@@ -68,7 +68,33 @@ public:
 	 */
 	ViewHandoff &GetHandoff() { return this->handoff; }
 
+	/**
+	 * The atlas of sprite images on the GPU.
+	 * @return The atlas.
+	 */
+	SpriteAtlas &GetSpriteAtlas() { return this->atlas; }
+
+	void PlaceCamera(double x, double y, double height, double yaw, double pitch);
+	bool ShowSprite(std::span<const PalSpriteID> layers);
+	void ClearShownSprites();
+
+	/**
+	 * Number of sprites shown with #ShowSprite(), counting every layer.
+	 * @return The count.
+	 */
+	size_t GetShownSpriteCount() const { return this->shown_sprites.size(); }
+
 private:
+	/** A sprite shown as billboard through #ShowSprite(). */
+	struct ShownSprite {
+		SpriteID sprite; ///< The sprite.
+		PaletteID palette; ///< Its palette.
+		Vec3d position; ///< Its anchor, in metres.
+		uint8_t layer; ///< Its layer among the sprites at the same anchor.
+	};
+
+	static constexpr size_t MAX_SHOWN_SPRITES = 64; ///< Most sprites #ShowSprite() keeps; the oldest go first.
+
 	bool active = false; ///< Whether a first-person view is open.
 	uint32_t session = 0; ///< Bridge session the world mirror was built for.
 	bool reset_pending = false; ///< Whether the renderer still has to drop its chunks.
@@ -78,8 +104,11 @@ private:
 	ViewHandoff handoff; ///< Hand-over to the renderer.
 	std::vector<ChunkIndex> dirty; ///< Scratch list of changed chunks.
 	std::vector<ChunkOp> ops; ///< Scratch list of chunk changes.
+	SpriteAtlas atlas; ///< Atlas of sprite images on the GPU.
+	std::vector<ShownSprite> shown_sprites; ///< Sprites shown as billboards.
 
 	void ResetWorld();
+	void BuildBillboards(std::vector<SpriteBillboard> &billboards);
 	double GroundHeight(double x, double y) const;
 };
 

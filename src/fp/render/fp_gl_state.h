@@ -30,6 +30,12 @@ public:
 		_fpgl.glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &this->read_framebuffer);
 		_fpgl.glGetIntegerv(GL_RENDERBUFFER_BINDING, &this->renderbuffer);
 		_fpgl.glGetIntegerv(GL_ACTIVE_TEXTURE, &this->active_texture);
+		_fpgl.glActiveTexture(GL_TEXTURE0);
+		_fpgl.glGetIntegerv(GL_TEXTURE_BINDING_2D, &this->texture_2d);
+		_fpgl.glActiveTexture(this->active_texture);
+		_fpgl.glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &this->pixel_unpack_buffer);
+		_fpgl.glGetIntegerv(GL_UNPACK_ALIGNMENT, &this->unpack_alignment);
+		_fpgl.glGetIntegerv(GL_UNPACK_ROW_LENGTH, &this->unpack_row_length);
 		_fpgl.glGetIntegerv(GL_VIEWPORT, this->viewport.data());
 		_fpgl.glGetIntegerv(GL_SCISSOR_BOX, this->scissor.data());
 		_fpgl.glGetIntegerv(GL_DEPTH_FUNC, &this->depth_func);
@@ -63,6 +69,11 @@ public:
 		_fpgl.glDepthFunc(this->depth_func);
 		_fpgl.glScissor(this->scissor[0], this->scissor[1], this->scissor[2], this->scissor[3]);
 		_fpgl.glViewport(this->viewport[0], this->viewport[1], this->viewport[2], this->viewport[3]);
+		_fpgl.glPixelStorei(GL_UNPACK_ROW_LENGTH, this->unpack_row_length);
+		_fpgl.glPixelStorei(GL_UNPACK_ALIGNMENT, this->unpack_alignment);
+		_fpgl.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, this->pixel_unpack_buffer);
+		_fpgl.glActiveTexture(GL_TEXTURE0);
+		_fpgl.glBindTexture(GL_TEXTURE_2D, this->texture_2d);
 		_fpgl.glActiveTexture(this->active_texture);
 		_fpgl.glBindRenderbuffer(GL_RENDERBUFFER, this->renderbuffer);
 		_fpgl.glBindFramebuffer(GL_READ_FRAMEBUFFER, this->read_framebuffer);
@@ -98,6 +109,10 @@ private:
 	GLint read_framebuffer = 0; ///< Bound read framebuffer.
 	GLint renderbuffer = 0; ///< Bound renderbuffer.
 	GLint active_texture = GL_TEXTURE0; ///< Active texture unit.
+	GLint texture_2d = 0; ///< 2D texture bound to unit 0.
+	GLint pixel_unpack_buffer = 0; ///< Bound pixel unpack buffer.
+	GLint unpack_alignment = 4; ///< Row alignment of pixel uploads.
+	GLint unpack_row_length = 0; ///< Row length of pixel uploads.
 	std::array<GLint, 4> viewport{}; ///< Viewport.
 	std::array<GLint, 4> scissor{}; ///< Scissor box.
 	GLint depth_func = GL_LESS; ///< Depth function.

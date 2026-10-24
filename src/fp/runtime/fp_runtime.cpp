@@ -10,6 +10,7 @@
 #include "../../stdafx.h"
 #include "fp_runtime.h"
 #include "../sim/fp_bridge.h"
+#include "../sprites/fp_sprite_bridge.h"
 #include "../../landscape.h"
 #include "../../map_func.h"
 
@@ -64,6 +65,8 @@ void Runtime::Deactivate()
 	this->active = false;
 	Bridge::Get().Release();
 	this->mirror.Reset({}, this->scale);
+	this->atlas.Reset();
+	this->shown_sprites.clear();
 	this->handoff.Deactivate();
 }
 
@@ -74,6 +77,7 @@ void Runtime::ResetWorld()
 	this->scale = MetricScale{};
 	this->mirror.Reset(ChunkGrid(Map::SizeX(), Map::SizeY()), this->scale);
 	this->spectator.SetBounds(this->scale.TileLength() * Map::SizeX(), this->scale.TileLength() * Map::SizeY());
+	this->atlas.Reset();
 	this->reset_pending = true;
 }
 
@@ -102,7 +106,13 @@ void Runtime::Update(const InputState &input, uint delta_ms, const Rect &view_re
 	if (!this->active) return;
 
 	Bridge &bridge = Bridge::Get();
-	if (bridge.GetSession() != this->session || this->handoff.TakeContextLost()) this->ResetWorld();
+	if (bridge.GetSession() != this->session) {
+		/* Another game: shown sprites stood in the old world. */
+		this->shown_sprites.clear();
+		this->ResetWorld();
+	} else if (this->handoff.TakeContextLost()) {
+		this->ResetWorld();
+	}
 
 	/* Long frames, e.g. while the game was busy loading, should not throw the camera across the map. */
 	double dt = std::min(delta_ms / 1000.0, 0.1);
@@ -127,7 +137,100 @@ void Runtime::Update(const InputState &input, uint delta_ms, const Rect &view_re
 	frame.view_distance = VIEW_DISTANCE;
 	frame.view_rect = view_rect;
 	frame.visible = std::move(visible);
+	this->BuildBillboards(frame.billboards);
+
+	AtlasChanges atlas_changes;
+	this->atlas.TakeChanges(atlas_changes);
+	this->handoff.PublishAtlas(std::move(atlas_changes));
 	this->handoff.Publish(frame, std::move(this->ops), std::exchange(this->reset_pending, false));
+}
+
+/**
+ * Collect the billboards of the shown sprites, putting their images into the atlas as needed.
+ * @param[out] billboards Receives the billboards.
+ */
+void Runtime::BuildBillboards(std::vector<SpriteBillboard> &billboards)
+{
+	/* When the atlas is full, it starts over in the middle of the requests and voids the regions taken
+	 * before; then the requests run once more, and only images that fit together are shown. */
+	for (int attempt = 0; attempt < 2; attempt++) {
+		uint32_t epoch = this->atlas.GetEpoch();
+		billboards.clear();
+		for (const ShownSprite &shown : this->shown_sprites) {
+			std::optional<AtlasRegion> region = this->atlas.Request(shown.sprite, shown.palette);
+			if (!region.has_value()) continue;
+
+			SpriteBillboard &billboard = billboards.emplace_back();
+			billboard.position = shown.position;
+			billboard.region = *region;
+			billboard.pixel_length = SpritePixelLength(this->scale, region->zoom);
+			billboard.layer = shown.layer;
+		}
+		if (this->atlas.GetEpoch() == epoch) break;
+	}
+}
+
+/**
+ * Put the camera somewhere, e.g. for reproducible screenshots.
+ * @param x X coordinate, in metres.
+ * @param y Y coordinate, in metres.
+ * @param height Height of the eye above the ground, in metres; at least Spectator::EYE_HEIGHT.
+ * @param yaw Heading in radians, counter-clockwise from the X axis seen from above.
+ * @param pitch Pitch in radians, positive is up.
+ */
+void Runtime::PlaceCamera(double x, double y, double height, double yaw, double pitch)
+{
+	CameraPose pose = this->spectator.GetCamera();
+	pose.position = {x, y, this->GroundHeight(x, y) + std::max(height, Spectator::EYE_HEIGHT)};
+	pose.yaw = yaw;
+	pose.pitch = Clamp(pitch, -Spectator::MAX_PITCH, Spectator::MAX_PITCH);
+	this->spectator.Place(pose);
+}
+
+/**
+ * Show a sprite as billboard in front of the camera, at a distance that
+ * suits its size. The sprite is raised so that its lowest pixel is at that
+ * point, or on the ground where the point is under the ground.
+ * @param layers The sprite, with its palette; several for a sprite of
+ *               layers, like a vehicle, which are drawn in order.
+ * @return False iff no layer could be decoded.
+ */
+bool Runtime::ShowSprite(std::span<const PalSpriteID> layers)
+{
+	if (!this->active || layers.empty()) return false;
+
+	SpriteBridge &sprites = SpriteBridge::Get();
+	double size = 0;
+	double lift = 0;
+	bool any = false;
+	for (const PalSpriteID &layer : layers) {
+		auto image = sprites.GetImage(layer.sprite, layer.pal);
+		if (image == nullptr) continue;
+		double pixel = SpritePixelLength(this->scale, image->zoom);
+		size = std::max(size, std::max(image->width, image->height) * pixel);
+		lift = std::max(lift, (image->y_offs + image->height) * pixel);
+		any = true;
+	}
+	if (!any) return false;
+
+	const CameraPose camera = this->spectator.GetCamera();
+	const double distance = Clamp(size * 2.5, 10.0, 300.0);
+	Vec3d anchor = camera.position + camera.Forward() * distance;
+	anchor.z = std::max(anchor.z, this->GroundHeight(anchor.x, anchor.y)) + lift;
+
+	for (size_t i = 0; i < layers.size(); i++) {
+		this->shown_sprites.push_back({layers[i].sprite, layers[i].pal, anchor, static_cast<uint8_t>(std::min<size_t>(i, UINT8_MAX))});
+	}
+	if (this->shown_sprites.size() > MAX_SHOWN_SPRITES) {
+		this->shown_sprites.erase(this->shown_sprites.begin(), this->shown_sprites.end() - MAX_SHOWN_SPRITES);
+	}
+	return true;
+}
+
+/** Remove all sprites shown with #ShowSprite(). */
+void Runtime::ClearShownSprites()
+{
+	this->shown_sprites.clear();
 }
 
 } // namespace fp
